@@ -6,9 +6,13 @@
 #include <rand.h>
 
 #include "sprites/car.c"
+#include "backgrounds/arena.h"
 
 #define FLOOR               140u
 #define GAME_SPEED          3 // Higher is slower
+
+#define ARENA_X_MIN         16
+#define ARENA_X_MAX         144
 
 #define GRAVITY             1
 #define MAX_VELOCITY        5
@@ -131,11 +135,17 @@ void clamp_velocity(INT8 *d_x, INT8 *d_y) {
     }
 }
 
+void initialize_background() {
+    set_bkg_data(0x0, arena_tile_count, arena_tile_data);
+    set_bkg_tiles(0, 0, arena_tile_map_width, arena_tile_map_height, arena_map_data);
+}
+
 void main() {
     BGP_REG = OBP0_REG = OBP1_REG = 0xE4;
 
     SPRITES_8x8;
 
+    initialize_background();
     initialize_cars(1);
 
     SHOW_BKG; SHOW_SPRITES;
@@ -197,6 +207,15 @@ void main() {
         x_pos += d_x;
         y_pos += d_y;
 
+        if (x_pos >= ARENA_X_MAX) {
+            x_pos = ARENA_X_MAX;
+            d_x = 0;
+        } 
+        else if (x_pos <= ARENA_X_MIN) {
+            x_pos = ARENA_X_MIN;
+            d_x = 0;
+        }
+
         if (y_pos >= FLOOR) {
             y_pos = FLOOR;
             d_y = 0;
@@ -204,6 +223,8 @@ void main() {
         else if (y_pos < FLOOR) {
             d_y += GRAVITY;
         }
+
+        // TODO: WIP
         // clamp_velocity(&d_x, &d_y);
 
         move_car_sprite(0, x_pos + d_x, y_pos + d_y, rotation);
