@@ -6,6 +6,7 @@
 #include <rand.h>
 
 #include "sprites/car.c"
+#include "sprites/boost.c"
 #include "backgrounds/arena.h"
 
 #define FLOOR               140u
@@ -91,6 +92,86 @@ void draw_car_roll(INT8 n, UINT8 rot) {
     }
 }
 
+void draw_boost_sprite(UINT8 n, UINT8 x, UINT8 y, UINT8 rot, UINT8 t) {
+    UINT8 game_spr = (n * 4) + 4;
+    UINT8 spr_num = 25;
+    INT8 x_o = 0;
+    INT8 y_o = 0;
+    UINT8 tick_prop = 0x00;
+    UINT8 mod_prop = 0x00;
+    UINT8 quadrant = rot / 32;
+
+    if (quadrant == 0) // Car hood up, facing right
+    {
+        x_o = -8;
+        y_o = 4;
+        tick_prop = S_FLIPY;
+    }
+    else if (quadrant ==  1) // Car hood up, facing downward right
+    {
+        spr_num = t ? 26 : 27;
+        x_o = -4;
+        y_o = -4;
+        mod_prop = S_FLIPY;
+    }
+    else if (quadrant ==  2) // Car hood facing right, nose down
+    {
+        spr_num = 28;
+        x_o = 4;
+        y_o = -8;
+        tick_prop = S_FLIPX;
+        mod_prop = S_FLIPY;
+    }
+    else if (quadrant ==  3) // Car hood down, facing downward left
+    {
+        spr_num = t ? 26 : 27;
+        x_o = 12;
+        y_o = -4;
+        mod_prop = S_FLIPY | S_FLIPX;
+    }
+    else if (quadrant ==  4) // Car hood down, facing left
+    {
+        x_o = 16;
+        y_o = 4;
+        tick_prop = S_FLIPY;
+        mod_prop = S_FLIPX;
+    }
+    else if (quadrant ==  5) // Car hood down, facing upward left
+    {
+        spr_num = t ? 26 : 27;
+        x_o = 12;
+        y_o = 12;
+        mod_prop = S_FLIPX;
+    }
+    else if (quadrant ==  6) // Car hood facing left, nose up
+    {
+        spr_num = 28;
+        x_o = 4;
+        y_o = 16;
+        tick_prop = S_FLIPX;
+    }
+    else if (quadrant ==  7) // Car hood up, facing upward right
+    {
+        spr_num = t ? 26 : 27;
+        x_o = -4;
+        y_o = 12;
+    }
+
+    set_sprite_tile(game_spr, spr_num);
+    move_sprite(game_spr, x + x_o, y + y_o);
+    set_sprite_prop(game_spr, mod_prop);
+
+    if (t) {
+        set_sprite_prop(game_spr, get_sprite_prop(game_spr) | tick_prop);
+    } else {
+        set_sprite_prop(game_spr, get_sprite_prop(game_spr) & ~tick_prop);
+    }
+}
+
+void kill_boost_sprite(UINT8 n) {
+    move_sprite((n * 4) + 4, 255, 255); // offscreen
+}
+
 void move_car_sprite(INT8 n, INT8 x, INT8 y, INT8 rot) {
     INT8 spr_offset = n * 4;
 
@@ -104,6 +185,7 @@ void move_car_sprite(INT8 n, INT8 x, INT8 y, INT8 rot) {
 
 void initialize_cars(INT8 n) {
     set_sprite_data(0, 24, car);
+    set_sprite_data(25, 4, boost);
 
     for(INT8 i = 0; i < n; i++) {
         for(INT8 j = 0; j < 4; j++) {
@@ -120,22 +202,6 @@ void initialize_cars(INT8 n) {
 
 INT8 debounced_input(INT8 target, INT8 new, INT8 old) {
     return (new & target) && !(old & target);
-}
-
-void clamp_velocity(INT8 *d_x, INT8 *d_y) {
-    if (*d_x > MAX_VELOCITY) {
-        *d_x = MAX_VELOCITY;
-    } 
-    else if (*d_x < MAX_VELOCITY) {
-        *d_x = -MAX_VELOCITY;
-    }
-
-    if (*d_y > MAX_VELOCITY) {
-        *d_y = MAX_VELOCITY;
-    } 
-    else if (*d_y < MAX_VELOCITY) {
-        *d_y = -MAX_VELOCITY;
-    }
 }
 
 void initialize_background() {
@@ -242,7 +308,7 @@ void main() {
             else if (key1 & J_LEFT) {
                 d_x -= ACCELERATION;
             }
-            else {
+            else if (!(key1 & J_B)) {
                 if (d_x > 0) {
                     d_x -= ACCELERATION;
 
@@ -298,10 +364,13 @@ void main() {
             d_y = 0;
         }
 
-        // TODO: WIP
-        // clamp_velocity(&d_x, &d_y);
+        move_car_sprite(0, x_pos, y_pos, rotation);
 
-        move_car_sprite(0, x_pos + d_x, y_pos + d_y, rotation);
+        if (key1 & J_B) {
+            draw_boost_sprite(0, x_pos, y_pos, rotation, tick % 2);
+        } else {
+            kill_boost_sprite(0);
+        }
 
         tick++;
     }
