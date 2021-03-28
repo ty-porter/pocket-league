@@ -9,6 +9,7 @@
 #include "backgrounds/arena.h"
 
 #define FLOOR               140u
+#define CEILING             24u
 #define GAME_SPEED          3 // Higher is slower
 
 #define ARENA_X_MIN         16
@@ -18,6 +19,8 @@
 #define MAX_VELOCITY        5
 #define JUMP_ACCELERATION   10
 #define ACCELERATION        1
+#define ROTATION_SPEED      15
+#define BOOST_ACCELERATION  1
 
 #define CAR_1_START_X       64
 #define CAR_1_START_y       64
@@ -140,6 +143,56 @@ void initialize_background() {
     set_bkg_tiles(0, 0, arena_tile_map_width, arena_tile_map_height, arena_map_data);
 }
 
+void calculate_boost_velocity_vectors(UINT8 rot, INT8 *d_x, INT8 *d_y) {
+    UINT8 quadrant = rot / 32;
+    INT8 x_mod = 0;
+    INT8 y_mod = 0;
+
+    if (quadrant == 0) // Car hood up, facing right
+    {
+        x_mod = 1;
+    }
+    else if (quadrant ==  1) // Car hood up, facing downward right
+    {
+        x_mod = 1;
+        y_mod = 1;
+    }
+    else if (quadrant ==  2) // Car hood facing right, nose down
+    {
+        y_mod = 1;
+    }
+    else if (quadrant ==  3) // Car hood down, facing downward left
+    {
+        x_mod = -1;
+        y_mod =  1;
+    }
+    else if (quadrant ==  4) // Car hood down, facing left
+    {
+        x_mod = -1;
+    }
+    else if (quadrant ==  5) // Car hood down, facing upward left
+    {
+        x_mod = -1;
+        y_mod = -1;
+    }
+    else if (quadrant ==  6) // Car hood facing left, nose up
+    {
+        y_mod = -1;
+    }
+    else if (quadrant ==  7) // Car hood up, facing upward right
+    {
+        x_mod =  1;
+        y_mod = -1;
+    }
+    else // Default
+    {
+
+    }
+
+    *d_x += BOOST_ACCELERATION * x_mod;
+    *d_y += BOOST_ACCELERATION * y_mod;
+}
+
 void main() {
     BGP_REG = OBP0_REG = OBP1_REG = 0xE4;
 
@@ -180,28 +233,44 @@ void main() {
         }
 
         // Drive
-        if (key1 & J_RIGHT)  {
-            d_x += ACCELERATION;
-        }
-        else if (key1 & J_LEFT) {
-            d_x -= ACCELERATION;
+        if (y_pos == FLOOR) {
+            rotation = 0;
+            
+            if (key1 & J_RIGHT)  {
+                d_x += ACCELERATION;
+            }
+            else if (key1 & J_LEFT) {
+                d_x -= ACCELERATION;
+            }
+            else {
+                if (d_x > 0) {
+                    d_x -= ACCELERATION;
+
+                    if (d_x <= 0) {
+                        d_x = 0;
+                    }
+                }
+
+                if (d_x < 0) {
+                    d_x += ACCELERATION;
+
+                    if (d_x >= 0) {
+                        d_x = 0;
+                    }
+                }
+            }
         }
         else {
-            if (d_x > 0) {
-                d_x -= ACCELERATION;
-
-                if (d_x <= 0) {
-                    d_x = 0;
-                }
+            if (key1 & J_RIGHT)  {
+                rotation += ROTATION_SPEED;
             }
-
-            if (d_x < 0) {
-                d_x += ACCELERATION;
-
-                if (d_x >= 0) {
-                    d_x = 0;
-                }
+            else if (key1 & J_LEFT) {
+                rotation -= ROTATION_SPEED;
             }
+        }
+
+        if (key1 & J_B) {
+            calculate_boost_velocity_vectors(rotation, &d_x, &d_y);
         }
 
         x_pos += d_x;
@@ -222,6 +291,11 @@ void main() {
         } 
         else if (y_pos < FLOOR) {
             d_y += GRAVITY;
+        }
+
+        if (y_pos < CEILING) {
+            y_pos = CEILING;
+            d_y = 0;
         }
 
         // TODO: WIP
