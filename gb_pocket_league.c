@@ -7,6 +7,17 @@
 
 #include "sprites/car.c"
 
+#define FLOOR               140u
+#define GAME_SPEED          3 // Higher is slower
+
+#define GRAVITY             1
+#define MAX_VELOCITY        5
+#define JUMP_ACCELERATION   10
+#define ACCELERATION        1
+
+#define CAR_1_START_X       64
+#define CAR_1_START_y       64
+
 /* Rolls the car clockwise based on *rot* param (INT8 0 - 255) */
 void draw_car_roll(INT8 n, UINT8 rot) {
     UINT8 quadrant = rot / 32;
@@ -100,6 +111,26 @@ void initialize_cars(INT8 n) {
     }
 }
 
+INT8 debounced_input(INT8 target, INT8 new, INT8 old) {
+    return (new & target) && !(old & target);
+}
+
+void clamp_velocity(INT8 *d_x, INT8 *d_y) {
+    if (*d_x > MAX_VELOCITY) {
+        *d_x = MAX_VELOCITY;
+    } 
+    else if (*d_x < MAX_VELOCITY) {
+        *d_x = -MAX_VELOCITY;
+    }
+
+    if (*d_y > MAX_VELOCITY) {
+        *d_y = MAX_VELOCITY;
+    } 
+    else if (*d_y < MAX_VELOCITY) {
+        *d_y = -MAX_VELOCITY;
+    }
+}
+
 void main() {
     BGP_REG = OBP0_REG = OBP1_REG = 0xE4;
 
@@ -109,16 +140,74 @@ void main() {
 
     SHOW_BKG; SHOW_SPRITES;
 
-    UINT8 timer = 0;
+    INT8 key1    = joypad();
+    INT8 key2    = key1;
+
+    INT8 d_x = 0;
+    INT8 d_y = 0;
+
+    UINT8 x_pos = CAR_1_START_X;
+    UINT8 y_pos = CAR_1_START_y;
+
     UINT8 rotation = 0;
+    UINT8 tick = 0;
 
     while(1) {
-        move_car_sprite(0, 64, 64, rotation);
+        wait_vbl_done();
 
-        if (timer % 3 == 0) {
-            rotation++;
+        if (tick % GAME_SPEED != 0) {
+            tick++;
+            continue;
         }
-        
-        timer++;
+
+        // Read the keys
+        key2 = key1;
+        key1 = joypad();
+
+        // Jump
+        if (debounced_input(J_A, key1, key2) && y_pos == FLOOR) {
+            d_y = -JUMP_ACCELERATION;
+        }
+
+        // Drive
+        if (key1 & J_RIGHT)  {
+            d_x += ACCELERATION;
+        }
+        else if (key1 & J_LEFT) {
+            d_x -= ACCELERATION;
+        }
+        else {
+            if (d_x > 0) {
+                d_x -= ACCELERATION;
+
+                if (d_x <= 0) {
+                    d_x = 0;
+                }
+            }
+
+            if (d_x < 0) {
+                d_x += ACCELERATION;
+
+                if (d_x >= 0) {
+                    d_x = 0;
+                }
+            }
+        }
+
+        x_pos += d_x;
+        y_pos += d_y;
+
+        if (y_pos >= FLOOR) {
+            y_pos = FLOOR;
+            d_y = 0;
+        } 
+        else if (y_pos < FLOOR) {
+            d_y += GRAVITY;
+        }
+        // clamp_velocity(&d_x, &d_y);
+
+        move_car_sprite(0, x_pos + d_x, y_pos + d_y, rotation);
+
+        tick++;
     }
 }
