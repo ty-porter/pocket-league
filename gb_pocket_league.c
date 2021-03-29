@@ -39,6 +39,8 @@
 #define BALL_BUMP_VERT      10 // Slight upward velocity for hitting the ball
 #define BOUNCE_DECAY        5
 
+#define CPU_PREDICTION      5 // How many ticks to spend predicting ball position
+
 typedef enum {
     TITLE,
     GAME,
@@ -335,7 +337,7 @@ void initialize_game_background() {
     set_bkg_tiles(0, 0, arena_tile_map_width, arena_tile_map_height, arena_map_data);
 }
 
-void calculate_boost_velocity_vectors(UINT8 rot, INT8 *d_x, INT8 *d_y) {
+void calculate_boost_velocity_vectors(UINT8 n, UINT8 rot, INT8 *d_x, INT8 *d_y) {
     UINT8 quadrant = rot / 32;
     INT8 x_mod = 0;
     INT8 y_mod = 0;
@@ -381,6 +383,10 @@ void calculate_boost_velocity_vectors(UINT8 rot, INT8 *d_x, INT8 *d_y) {
 
     }
 
+    if (n == 1) {
+        x_mod *= -1;
+    }
+
     *d_x += BOOST_ACCELERATION * x_mod;
     *d_y += BOOST_ACCELERATION * y_mod;
 }
@@ -392,13 +398,15 @@ void calculate_ball_velocity_vectors(UINT8 x, UINT8 y, INT8 d_x, INT8 d_y, UINT8
     }
 }
 
-INT8 calculate_cpu_input(UINT8 x, UINT8 y, INT8 d_x, INT8 d_y, UINT8 ball_x, UINT8 ball_y, INT8 ball_d_x, INT8 ball_d_y) {
-    // TODO: Implement!
-
-    return 0x00;
+UINT8 int_distance(UINT8 x, UINT8 y) {
+    if (x > y) {
+        return x - y;
+    } else {
+        return y - x;
+    }
 }
 
-void tick_car_physics(UINT8 *x, UINT8 *y, INT8 *d_x, INT8 *d_y, UINT8 *rot, UINT8 input1, UINT8 input2) {
+void tick_car_physics(UINT8 n, UINT8 *x, UINT8 *y, INT8 *d_x, INT8 *d_y, UINT8 *rot, UINT8 input1, UINT8 input2) {
     // Jump
     if (debounced_input(J_A, input1, input2) && *y == FLOOR) {
         *d_y = -JUMP_ACCELERATION;
@@ -442,7 +450,7 @@ void tick_car_physics(UINT8 *x, UINT8 *y, INT8 *d_x, INT8 *d_y, UINT8 *rot, UINT
     }
 
     if (input1 & J_B) {
-        calculate_boost_velocity_vectors(*rot, d_x, d_y);
+        calculate_boost_velocity_vectors(n, *rot, d_x, d_y);
     }
 
     *x += *d_x;
@@ -537,6 +545,82 @@ void tick_ball_physics(
         *ball_x_pos = ARENA_X_MIN;
         *ball_d_x *= -1;
     }
+}
+
+UINT8 calculate_ball_quadrant(UINT8 car_x, UINT8 car_y, UINT8 ball_x, UINT8 ball_y) {
+    if (car_x - 8 <= ball_x && car_x + 8 >= ball_x) {
+        if (car_y < ball_y) {
+            return 2;
+        } else {
+            return 6;
+        }
+    }
+    else if (car_y - 16 <= ball_y && car_y + 16 >= ball_y) {
+        if (car_x < ball_x) {
+            return 4;
+        } else {
+            return 0;
+        }
+    }
+    else if (car_y - 16 > ball_y) {
+        if (car_x < ball_x) {
+            return 3;
+        } else {
+            return 4;
+        }
+    } 
+    else {
+        if (car_x < ball_x) {
+            return 5;
+        } else {
+            return 6;
+        }
+    }
+}
+
+INT8 calculate_cpu_input(UINT8 x, UINT8 y, UINT8 rot, UINT8 ball_x, UINT8 ball_y, INT8 ball_d_x, INT8 ball_d_y) {
+    UINT8 counter = 0;
+    UINT8 input = 0x00; // Nothing
+    UINT8 quadrant = 0;
+
+    while (counter < CPU_PREDICTION) {
+        tick_ball_physics(
+            &ball_x, &ball_y, &ball_d_x, &ball_d_y,
+            255, 255, 255, 255,
+            255, 255, 255, 255
+        );
+
+        counter++;
+    }
+
+    if (int_distance(ball_y, y) < 15) { // Same Y value, should drive if on the floor
+        if (y == FLOOR) {
+            if (x < ball_x) {
+                input = J_RIGHT;
+            } else {
+                input = J_LEFT;
+            }
+        }
+    } 
+    else if(int_distance(ball_y, y) >= 15) { // Not same Y, should jump or rotate
+        if (y == FLOOR && int_distance(ball_x, ball_y) < 20) { // On the floor and close
+            input =  J_A;
+        } else {
+            if (ball_x > x) {
+                input = input | J_RIGHT;
+            } else {
+                input = input | J_LEFT;
+            }
+        }
+    }
+
+    quadrant = calculate_ball_quadrant(x, y, ball_x, ball_y);
+
+    if (rot / 32 == quadrant) {
+        input = input | J_B;
+    }
+
+    return input;
 }
 
 screen_t title() {
@@ -693,10 +777,10 @@ screen_t game() {
         key1 = joypad();
 
         cpu_key2 = cpu_key1;
-        cpu_key1 = calculate_cpu_input(cpu_x_pos, cpu_y_pos, cpu_d_x, cpu_d_y, ball_x_pos, ball_y_pos, ball_d_x, ball_d_y);
+        cpu_key1 = calculate_cpu_input(cpu_x_pos, cpu_y_pos, cpu_rot, ball_x_pos, ball_y_pos, ball_d_x, ball_d_y);
 
-        tick_car_physics(&plr_x_pos, &plr_y_pos, &plr_d_x, &plr_d_y, &plr_rot, key1, key2);
-        tick_car_physics(&cpu_x_pos, &cpu_y_pos, &cpu_d_x, &cpu_d_y, &cpu_rot, cpu_key1, cpu_key2);
+        tick_car_physics(0, &plr_x_pos, &plr_y_pos, &plr_d_x, &plr_d_y, &plr_rot, key1,     key2);
+        tick_car_physics(1, &cpu_x_pos, &cpu_y_pos, &cpu_d_x, &cpu_d_y, &cpu_rot, cpu_key1, cpu_key2);
 
         tick_ball_physics(
             &ball_x_pos, &ball_y_pos, &ball_d_x, &ball_d_y, // Ball data
