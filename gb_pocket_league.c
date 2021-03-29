@@ -8,6 +8,7 @@
 
 #include "sprites/car.c"
 #include "sprites/boost.c"
+#include "sprites/player_tags.c"
 #include "sprites/ball.c"
 #include "sprites/cursor.c"
 
@@ -28,14 +29,18 @@
 #define ROTATION_SPEED      15
 #define BOOST_ACCELERATION  1
 
-#define NUM_CARS            1
+#define NUM_CARS            2
 #define CAR_1_START_X       20
 #define CAR_1_START_y       136
+#define CAR_2_START_X       120
+#define CAR_2_START_Y       136
 
 #define BALL_START_X        80
 #define BALL_VELOCITY       2
 #define BALL_BUMP_VERT      10 // Slight upward velocity for hitting the ball
 #define BOUNCE_DECAY        5
+
+#define CPU_PREDICTION      5 // How many ticks to spend predicting ball position
 
 typedef enum {
     TITLE,
@@ -43,7 +48,7 @@ typedef enum {
     CREDITS
 } screen_t;
 
-const unsigned char fade_pallettes[] = {
+const unsigned char fade_palettes[] = {
     0xFFU, 0xFEU, 0xF9U, 0xE4U,
 };
 
@@ -64,70 +69,123 @@ void draw_car_roll(INT8 n, UINT8 rot) {
 
     if (quadrant == 0) // Car hood up, facing right
     {
-        unsigned char sprites[] = { 0, 1, 2, 3 };
+        if (n == 0) {
+            unsigned char sprites[] = { 0, 1, 2, 3 };
+        } else
+        {
+            unsigned char sprites[] = { 2, 3, 0, 1};
+            invert_x = 1;
+        }
     }
     else if (quadrant ==  1) // Car hood up, facing downward right
     {
-        unsigned char sprites[] = { 12, 13, 14, 15 };
+        if (n == 0) {
+            unsigned char sprites[] = { 12, 13, 14, 15 };
+        } else {
+            unsigned char sprites[] = { 6, 7, 4, 5 };
+            invert_x = 1;
+        }
     }
     else if (quadrant ==  2) // Car hood facing right, nose down
     {
-        unsigned char sprites[] = { 11, 10, 9, 8 };
-        invert_x = 1;
-        invert_y = 1;
+        if (n == 0) {
+            unsigned char sprites[] = { 11, 10, 9, 8 };
+            invert_x = 1;
+            invert_y = 1;
+        } else {
+            unsigned char sprites[] = { 10, 11, 8, 9 };
+            invert_x = 1;
+        }
     }
     else if (quadrant ==  3) // Car hood down, facing downward left
     {
-        unsigned char sprites[] = { 20, 21, 22, 23 };
+        if (n == 0) {
+            unsigned char sprites[] = { 20, 21, 22, 23 };
+        } else {
+            unsigned char sprites[] = { 18, 19, 16, 17 };
+            invert_x = 1;
+        }
     }
     else if (quadrant ==  4) // Car hood down, facing left
     {
-        unsigned char sprites[] = { 3, 2, 1, 0 };
-        invert_x = 1;
-        invert_y = 1;
+        if (n == 0) {
+            unsigned char sprites[] = { 3, 2, 1, 0 };
+            invert_x = 1;
+            invert_y = 1;
+        } else {
+            unsigned char sprites[] = { 1, 0, 3, 2 };
+            invert_y = 1;
+        }
     }
     else if (quadrant ==  5) // Car hood down, facing upward left
     {
-        unsigned char sprites[] = { 16, 17, 18, 19 };
+        if (n == 0) {
+            unsigned char sprites[] = { 16, 17, 18, 19 };
+        } else {
+            unsigned char sprites[] = { 22, 23, 20, 21 };
+            invert_x = 1;
+        }
     }
     else if (quadrant ==  6) // Car hood facing left, nose up
     {
-        unsigned char sprites[] = { 8, 9, 10, 11 };
+        if (n == 0) {
+            unsigned char sprites[] = { 8, 9, 10, 11 };
+        } else {
+            unsigned char sprites[] = { 9, 8, 11, 10 };
+            invert_y = 1;
+        }
     }
     else if (quadrant ==  7) // Car hood up, facing upward right
     {
-        unsigned char sprites[] = { 4, 5, 6, 7 };
+        if (n == 0) {
+            unsigned char sprites[] = { 4, 5, 6, 7 };
+        } else {
+            unsigned char sprites[] = { 17, 16, 19, 18 };
+            invert_y = 1;
+        }
     }
     else // Default
     {
-        unsigned char sprites[] = { 0, 1, 2, 3 }; 
+        if (n == 0) {
+            unsigned char sprites[] = { 0, 1, 2, 3 };
+        } else
+        {
+            unsigned char sprites[] = { 2, 3, 0, 1};
+            invert_x = 1;
+        }
     }
 
     for (INT8 i = 0; i < 4; i++) {
-        set_sprite_tile(i + (4 * n), sprites[i]);
+        set_sprite_tile(i + (5 * n), sprites[i]);
 
         if (invert_y) {
-            set_sprite_prop(i + (4 * n), get_sprite_prop(i + (4 * n)) | S_FLIPY);
+            set_sprite_prop(i + (5 * n), get_sprite_prop(i + (5 * n)) | S_FLIPY);
         } else {
-            set_sprite_prop(i + (4 * n), get_sprite_prop(i + (4 * n)) & ~S_FLIPY);
+            set_sprite_prop(i + (5 * n), get_sprite_prop(i + (5 * n)) & ~S_FLIPY);
         }
 
         if (invert_x) {
-            set_sprite_prop(i + (4 * n), get_sprite_prop(i + (4 * n)) | S_FLIPX);
+            set_sprite_prop(i + (5 * n), get_sprite_prop(i + (5 * n)) | S_FLIPX);
         } else {
-            set_sprite_prop(i + (4 * n), get_sprite_prop(i + (4 * n)) & ~S_FLIPX);
+            set_sprite_prop(i + (5 * n), get_sprite_prop(i + (5 * n)) & ~S_FLIPX);
         }
     }
 }
 
 void draw_boost_sprite(UINT8 n, UINT8 x, UINT8 y, UINT8 rot, UINT8 t) {
-    UINT8 game_spr = (n * 4) + 4;
+    UINT8 game_spr = (n * 5) + 4;
     UINT8 spr_num = 25;
     INT8 x_o = 0;
     INT8 y_o = 0;
     UINT8 tick_prop = 0x00;
     UINT8 mod_prop = 0x00;
     UINT8 quadrant = rot / 32;
+
+    unsigned char cpu_offset[] = { 4, 5, 6, 7, 0, 1, 2, 3 };
+
+    if (n == 1) {
+        quadrant = cpu_offset[quadrant];
+    }
 
     if (quadrant == 0) // Car hood up, facing right
     {
@@ -197,16 +255,22 @@ void draw_boost_sprite(UINT8 n, UINT8 x, UINT8 y, UINT8 rot, UINT8 t) {
 }
 
 void kill_boost_sprite(UINT8 n) {
-    move_sprite((n * 4) + 4, 255, 255); // offscreen
+    move_sprite((n * 5) + 4, 255, 255); // offscreen
 }
 
 void move_car_sprite(UINT8 n, UINT8 x, UINT8 y, UINT8 rot) {
-    INT8 spr_offset = n * 4;
-
+    INT8 spr_offset = n * 5;
+    
     move_sprite(0 + spr_offset, x,     y    );
     move_sprite(1 + spr_offset, x,     y + 8);
     move_sprite(2 + spr_offset, x + 8, y    );
     move_sprite(3 + spr_offset, x + 8, y + 8);
+
+    if (n == 0) {
+        move_sprite(14, x + 4, y + 12);
+    } else {
+        move_sprite(15, x + 4, y + 12);
+    }
 
     draw_car_roll(n, rot);
 }
@@ -214,21 +278,24 @@ void move_car_sprite(UINT8 n, UINT8 x, UINT8 y, UINT8 rot) {
 void initialize_cars(INT8 n) {
     set_sprite_data(0, 24, car);
     set_sprite_data(25, 4, boost);
+    set_sprite_data(32, 2, player_tags);
 
     for(INT8 i = 0; i < n; i++) {
         for(INT8 j = 0; j < 4; j++) {
-            set_sprite_tile(j + (4 * i), j);
+            set_sprite_tile(j + (5 * i), j);
 
             if (i % 2 == 1) {
-                set_sprite_prop(j + (4 * i), get_sprite_prop(i) | S_FLIPX);
+                set_sprite_prop(j + (5 * i), S_FLIPX);
             }
         }
 
-        if (i == 1) {
+        if (i == 0) {
+            set_sprite_tile(14, 32); // Player Tag 1
             move_car_sprite(i, CAR_1_START_X, CAR_1_START_y, 0);
         } 
-        else {
-            // TODO: Refactor for 2 cars
+        else if (i == 1) {
+            set_sprite_tile(15, 33); // Player Tag 2
+            move_car_sprite(i, CAR_2_START_X, CAR_2_START_Y, 0);
         }
     }
 }
@@ -238,7 +305,7 @@ INT8 debounced_input(INT8 target, INT8 new, INT8 old) {
 }
 
 void move_ball_sprite(UINT8 x, UINT8 y, INT8 t) {
-    UINT8 sprite_start = NUM_CARS * 4 + 1;
+    UINT8 sprite_start = NUM_CARS * 5;
 
     for (INT8 i = 0; i < 4; i++) {
         set_sprite_tile(sprite_start + i, t % 2 == 0 ? 30 : 31);
@@ -280,7 +347,7 @@ void initialize_game_background() {
     set_bkg_tiles(0, 0, arena_tile_map_width, arena_tile_map_height, arena_map_data);
 }
 
-void calculate_boost_velocity_vectors(UINT8 rot, INT8 *d_x, INT8 *d_y) {
+void calculate_boost_velocity_vectors(UINT8 n, UINT8 rot, INT8 *d_x, INT8 *d_y) {
     UINT8 quadrant = rot / 32;
     INT8 x_mod = 0;
     INT8 y_mod = 0;
@@ -326,25 +393,261 @@ void calculate_boost_velocity_vectors(UINT8 rot, INT8 *d_x, INT8 *d_y) {
 
     }
 
+    if (n == 1) {
+        x_mod *= -1;
+    }
+
     *d_x += BOOST_ACCELERATION * x_mod;
     *d_y += BOOST_ACCELERATION * y_mod;
 }
 
-void calculate_ball_velocity_vectors(UINT8 x, UINT8 y, INT8 d_x, INT8 d_y, UINT8 ball_x, UINT8 ball_y, INT8 *ball_d_x, INT8 *ball_d_y) {
+UINT8 calculate_ball_velocity_vectors(UINT8 x, UINT8 y, INT8 d_x, INT8 d_y, UINT8 ball_x, UINT8 ball_y, INT8 *ball_d_x, INT8 *ball_d_y) {
     if ((x <= ball_x + 16 && x >= ball_x - 16) && (y <= ball_y + 11 && y >= ball_y - 5)) {
         *ball_d_x = d_x * BALL_VELOCITY;
         *ball_d_y = d_y - (BALL_BUMP_VERT * abs(d_x) / 10);
+
+        return 1; // Collision
+    }
+    
+    return 0;
+}
+
+UINT8 int_distance(UINT8 x, UINT8 y) {
+    if (x > y) {
+        return x - y;
+    } else {
+        return y - x;
     }
 }
 
+void tick_car_physics(UINT8 n, UINT8 *x, UINT8 *y, INT8 *d_x, INT8 *d_y, UINT8 *rot, UINT8 input1, UINT8 input2) {
+    // Jump
+    if (debounced_input(J_A, input1, input2) && *y == FLOOR) {
+        *d_y = -JUMP_ACCELERATION;
+    }
+
+    // Drive
+    if (*y == FLOOR) {
+        *rot = 0;
+        
+        if (input1 & J_RIGHT)  {
+            *d_x += ACCELERATION;
+        }
+        else if (input1 & J_LEFT) {
+            *d_x -= ACCELERATION;
+        }
+        else if (!(input1 & J_B)) {
+            if (*d_x > 0) {
+                *d_x -= ACCELERATION;
+
+                if (*d_x <= 0) {
+                    *d_x = 0;
+                }
+            }
+
+            if (*d_x < 0) {
+                *d_x += ACCELERATION;
+
+                if (*d_x >= 0) {
+                    *d_x = 0;
+                }
+            }
+        }
+    }
+    else {
+        if (input1 & J_RIGHT)  {
+            *rot += ROTATION_SPEED;
+        }
+        else if (input1 & J_LEFT) {
+            *rot -= ROTATION_SPEED;
+        }
+    }
+
+    if (input1 & J_B) {
+        calculate_boost_velocity_vectors(n, *rot, d_x, d_y);
+    }
+
+    *x += *d_x;
+    *y += *d_y;
+
+    if (*x >= ARENA_X_MAX) {
+        *x = ARENA_X_MAX;
+        *d_x = 0;
+    } 
+    else if (*x <= ARENA_X_MIN) {
+        *x = ARENA_X_MIN;
+        *d_x = 0;
+    }
+
+    if (*y >= FLOOR) {
+        *y = FLOOR;
+        *d_y = 0;
+    } 
+    else if (*y < FLOOR) {
+        *d_y += GRAVITY;
+    }
+
+    if (*y < CEILING) {
+        *y = CEILING;
+        *d_y = 0;
+    }
+}
+
+void tick_ball_physics(
+    UINT8 *ball_x_pos, UINT8 *ball_y_pos, INT8 *ball_d_x, INT8 *ball_d_y,
+    UINT8  plr_x_pos,  UINT8  plr_y_pos,  INT8  plr_d_x,  INT8  plr_d_y,         
+    UINT8  cpu_x_pos,  UINT8  cpu_y_pos,  INT8  cpu_d_x,  INT8  cpu_d_y
+) {
+    if (*ball_d_x > 0) {
+        if (*ball_d_x - ACCELERATION >= 0) {
+            *ball_d_x -= ACCELERATION;
+        }
+        else {
+            *ball_d_x = 0;
+        }
+    } 
+    else if (*ball_d_x < 0) {
+        if (*ball_d_x + ACCELERATION <= 0) {
+            *ball_d_x += ACCELERATION;
+        }
+        else {
+            *ball_d_x = 0;
+        }
+    }
+
+    *ball_d_y += GRAVITY;
+
+    if (*ball_y_pos + *ball_d_y > BALL_FLOOR) {
+        *ball_y_pos = BALL_FLOOR;
+        *ball_d_y = (*ball_d_y * -1) + (BOUNCE_DECAY * GRAVITY);
+
+        if (*ball_d_y > 0) {
+            *ball_d_y = 0;
+        }
+    }
+    else if (*ball_y_pos + *ball_d_y < CEILING) {
+        *ball_d_y *= -1;
+        *ball_y_pos = CEILING;
+    }
+
+    UINT8 player_collision = calculate_ball_velocity_vectors(cpu_x_pos, cpu_y_pos, cpu_d_x, cpu_d_y, *ball_x_pos, *ball_y_pos, ball_d_x, ball_d_y);
+    UINT8 cpu_collision = calculate_ball_velocity_vectors(plr_x_pos, plr_y_pos, plr_d_x, plr_d_y, *ball_x_pos, *ball_y_pos, ball_d_x, ball_d_y);
+
+    if (player_collision && cpu_collision) { // Pinch!
+        *ball_d_x += (plr_d_x + cpu_d_x);
+        *ball_d_y += (plr_d_y + cpu_d_y);
+    }
+
+    // Handle overflow errors
+    if (abs(*ball_d_x) >= *ball_x_pos && *ball_d_x < 0) {
+        *ball_x_pos = ARENA_X_MIN;
+        *ball_d_x *= -1;
+    }
+    else if (*ball_d_x + *ball_x_pos > 255) {
+        *ball_x_pos = ARENA_X_MAX;
+        *ball_d_x *= -1;
+    }
+
+    if (*ball_y_pos < abs(*ball_d_y) && *ball_d_y < 0) {
+        *ball_y_pos = CEILING;
+        *ball_d_y *= -1;
+    }
+
+    *ball_x_pos += *ball_d_x;
+    *ball_y_pos += *ball_d_y;
+
+    if (*ball_x_pos > ARENA_X_MAX) {
+        *ball_x_pos = ARENA_X_MAX;
+        *ball_d_x *= -1;
+    }
+    else if (*ball_x_pos < ARENA_X_MIN) {
+        *ball_x_pos = ARENA_X_MIN;
+        *ball_d_x *= -1;
+    }
+}
+
+UINT8 calculate_ball_quadrant(UINT8 car_x, UINT8 car_y, UINT8 ball_x, UINT8 ball_y) {
+    if (car_x - 8 <= ball_x && car_x + 8 >= ball_x) {
+        if (car_y < ball_y) {
+            return 2;
+        } else {
+            return 6;
+        }
+    }
+    else if (car_y - 16 <= ball_y && car_y + 16 >= ball_y) {
+        if (car_x < ball_x) {
+            return 4;
+        } else {
+            return 0;
+        }
+    }
+    else if (car_y - 16 > ball_y) {
+        if (car_x < ball_x) {
+            return 3;
+        } else {
+            return 4;
+        }
+    } 
+    else {
+        if (car_x < ball_x) {
+            return 5;
+        } else {
+            return 6;
+        }
+    }
+}
+
+INT8 calculate_cpu_input(UINT8 x, UINT8 y, UINT8 rot, UINT8 ball_x, UINT8 ball_y, INT8 ball_d_x, INT8 ball_d_y) {
+    UINT8 counter = 0;
+    UINT8 input = 0x00; // Nothing
+    UINT8 quadrant = 0;
+
+    while (counter < CPU_PREDICTION) {
+        tick_ball_physics(
+            &ball_x, &ball_y, &ball_d_x, &ball_d_y,
+            255, 255, 255, 255,
+            255, 255, 255, 255
+        );
+
+        counter++;
+    }
+
+    if (int_distance(ball_y, y) < 15) { // Same Y value, should drive if on the floor
+        if (y == FLOOR) {
+            if (x < ball_x) {
+                input = J_RIGHT;
+            } else {
+                input = J_LEFT;
+            }
+        }
+    } 
+    else if(int_distance(ball_y, y) >= 15) { // Not same Y, should jump or rotate
+        if (y == FLOOR && int_distance(ball_x, ball_y) < 20) { // On the floor and close
+            input =  J_A;
+        } else {
+            if (ball_x > x) {
+                input = input | J_RIGHT;
+            } else {
+                input = input | J_LEFT;
+            }
+        }
+    }
+
+    quadrant = calculate_ball_quadrant(x, y, ball_x, ball_y);
+
+    if (rot / 32 == quadrant) {
+        input = input | J_B;
+    }
+
+    return input;
+}
+
 screen_t title() {
-    BGP_REG = fade_pallettes[0];
+    BGP_REG = fade_palettes[0];
     OBP0_REG = OBP1_REG = 0xE4;
 
     SPRITES_8x8;
 
-    // Input
-    // Reading from joypad keeps held inputs from prev. screen from changing to next screen
     INT8 key1    = joypad();
     INT8 key2    = key1;
     UINT8 cursor = 0;
@@ -356,7 +659,7 @@ screen_t title() {
     // Fade in the title screen
     // Hides the tile changes from credits
     for (INT8 i = 0; i < 4; i++) {
-        BGP_REG = fade_pallettes[i];
+        BGP_REG = fade_palettes[i];
         delay(25);
     }
 
@@ -455,19 +758,29 @@ screen_t game() {
     INT8 key1    = joypad();
     INT8 key2    = key1;
 
-    INT8 d_x = 0;
-    INT8 d_y = 0;
+    INT8 cpu_key1 = 0x00;
+    INT8 cpu_key2 = 0x00;
+
+    INT8 plr_d_x = 0;
+    INT8 plr_d_y = 0;
+
+    INT8 cpu_d_x = 0;
+    INT8 cpu_d_y = 0;
 
     INT8 ball_d_x = 0;
     INT8 ball_d_y = 0;
 
-    UINT8 x_pos = CAR_1_START_X;
-    UINT8 y_pos = CAR_1_START_y;
+    UINT8 plr_x_pos = CAR_1_START_X;
+    UINT8 plr_y_pos = CAR_1_START_y;
+
+    UINT8 cpu_x_pos = CAR_2_START_X;
+    UINT8 cpu_y_pos = CAR_2_START_Y;
 
     UINT8 ball_x_pos = BALL_START_X;
     UINT8 ball_y_pos = BALL_FLOOR;
 
-    UINT8 rotation = 0;
+    UINT8 plr_rot = 0;
+    UINT8 cpu_rot = 0;
     UINT8 tick = 0;
 
     while(1) {
@@ -482,146 +795,33 @@ screen_t game() {
         key2 = key1;
         key1 = joypad();
 
-        // Jump
-        if (debounced_input(J_A, key1, key2) && y_pos == FLOOR) {
-            d_y = -JUMP_ACCELERATION;
-        }
+        cpu_key2 = cpu_key1;
+        cpu_key1 = calculate_cpu_input(cpu_x_pos, cpu_y_pos, cpu_rot, ball_x_pos, ball_y_pos, ball_d_x, ball_d_y);
 
-        // Drive
-        if (y_pos == FLOOR) {
-            rotation = 0;
-            
-            if (key1 & J_RIGHT)  {
-                d_x += ACCELERATION;
-            }
-            else if (key1 & J_LEFT) {
-                d_x -= ACCELERATION;
-            }
-            else if (!(key1 & J_B)) {
-                if (d_x > 0) {
-                    d_x -= ACCELERATION;
+        tick_car_physics(0, &plr_x_pos, &plr_y_pos, &plr_d_x, &plr_d_y, &plr_rot, key1,     key2);
+        tick_car_physics(1, &cpu_x_pos, &cpu_y_pos, &cpu_d_x, &cpu_d_y, &cpu_rot, cpu_key1, cpu_key2);
 
-                    if (d_x <= 0) {
-                        d_x = 0;
-                    }
-                }
+        tick_ball_physics(
+            &ball_x_pos, &ball_y_pos, &ball_d_x, &ball_d_y, // Ball data
+             plr_x_pos,   plr_y_pos,   plr_d_x,   plr_d_y,  // Player data
+             cpu_x_pos,   cpu_y_pos,   cpu_d_x,   cpu_d_y   // CPU data
+        );
 
-                if (d_x < 0) {
-                    d_x += ACCELERATION;
+        move_car_sprite(0, plr_x_pos, plr_y_pos, plr_rot);
+        move_car_sprite(1, cpu_x_pos, cpu_y_pos, cpu_rot);
 
-                    if (d_x >= 0) {
-                        d_x = 0;
-                    }
-                }
-            }
-        }
-        else {
-            if (key1 & J_RIGHT)  {
-                rotation += ROTATION_SPEED;
-            }
-            else if (key1 & J_LEFT) {
-                rotation -= ROTATION_SPEED;
-            }
-        }
-
-        if (key1 & J_B) {
-            calculate_boost_velocity_vectors(rotation, &d_x, &d_y);
-        }
-
-        x_pos += d_x;
-        y_pos += d_y;
-
-        if (x_pos >= ARENA_X_MAX) {
-            x_pos = ARENA_X_MAX;
-            d_x = 0;
-        } 
-        else if (x_pos <= ARENA_X_MIN) {
-            x_pos = ARENA_X_MIN;
-            d_x = 0;
-        }
-
-        if (y_pos >= FLOOR) {
-            y_pos = FLOOR;
-            d_y = 0;
-        } 
-        else if (y_pos < FLOOR) {
-            d_y += GRAVITY;
-        }
-
-        if (y_pos < CEILING) {
-            y_pos = CEILING;
-            d_y = 0;
-        }
-
-
-        if (ball_d_x > 0) {
-            if (ball_d_x - ACCELERATION >= 0) {
-                ball_d_x -= ACCELERATION;
-            }
-            else {
-                ball_d_x = 0;
-            }
-        } 
-        else if (ball_d_x < 0) {
-            if (ball_d_x + ACCELERATION <= 0) {
-                ball_d_x += ACCELERATION;
-            }
-            else {
-                ball_d_x = 0;
-            }
-        }
-
-        ball_d_y += GRAVITY;
-
-        if (ball_y_pos + ball_d_y > BALL_FLOOR) {
-            ball_y_pos = BALL_FLOOR;
-            ball_d_y = (ball_d_y * -1) + (BOUNCE_DECAY * GRAVITY);
-
-            if (ball_d_y > 0) {
-                ball_d_y = 0;
-            }
-        }
-        else if (ball_y_pos + ball_d_y < CEILING) {
-            ball_d_y *= -1;
-            ball_y_pos = CEILING;
-        }
-
-        calculate_ball_velocity_vectors(x_pos, y_pos, d_x, d_y, ball_x_pos, ball_y_pos, &ball_d_x, &ball_d_y);
-
-        // Handle overflow errors
-        if (abs(ball_d_x) >= ball_x_pos && ball_d_x < 0) {
-            ball_x_pos = ARENA_X_MIN;
-            ball_d_x *= -1;
-        }
-        else if (ball_d_x + ball_x_pos > 255) {
-            ball_x_pos = ARENA_X_MAX;
-            ball_d_x *= -1;
-        }
-
-        if (ball_y_pos < abs(ball_d_y) && ball_d_y < 0) {
-            ball_y_pos = CEILING;
-            ball_d_y *= -1;
-        }
-
-        ball_x_pos += ball_d_x;
-        ball_y_pos += ball_d_y;
-
-        if (ball_x_pos > ARENA_X_MAX) {
-            ball_x_pos = ARENA_X_MAX;
-            ball_d_x *= -1;
-        }
-        else if (ball_x_pos < ARENA_X_MIN) {
-            ball_x_pos = ARENA_X_MIN;
-            ball_d_x *= -1;
-        }
-
-        move_car_sprite(0, x_pos, y_pos, rotation);
         move_ball_sprite(ball_x_pos, ball_y_pos, ball_d_x | ball_d_y ? tick : 0); // Move sprite to position, check if moving for sprite updates
 
         if (key1 & J_B) {
-            draw_boost_sprite(0, x_pos, y_pos, rotation, tick % 2);
+            draw_boost_sprite(0, plr_x_pos, plr_y_pos, plr_rot, tick % 2);
         } else {
             kill_boost_sprite(0);
+        }
+
+        if (cpu_key1 & J_B) {
+            draw_boost_sprite(1, cpu_x_pos, cpu_y_pos, cpu_rot, tick % 2);
+        } else {
+            kill_boost_sprite(1);
         }
 
         tick++;
