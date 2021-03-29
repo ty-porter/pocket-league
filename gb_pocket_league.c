@@ -252,7 +252,7 @@ void draw_boost_sprite(UINT8 n, UINT8 x, UINT8 y, UINT8 rot, UINT8 t) {
 }
 
 void kill_boost_sprite(UINT8 n) {
-    move_sprite((n * 4) + 4, 255, 255); // offscreen
+    move_sprite((n * 5) + 4, 255, 255); // offscreen
 }
 
 void move_car_sprite(UINT8 n, UINT8 x, UINT8 y, UINT8 rot) {
@@ -398,6 +398,147 @@ INT8 calculate_cpu_input(UINT8 x, UINT8 y, INT8 d_x, INT8 d_y, UINT8 ball_x, UIN
     return 0x00;
 }
 
+void tick_car_physics(UINT8 *x, UINT8 *y, INT8 *d_x, INT8 *d_y, UINT8 *rot, UINT8 input1, UINT8 input2) {
+    // Jump
+    if (debounced_input(J_A, input1, input2) && *y == FLOOR) {
+        *d_y = -JUMP_ACCELERATION;
+    }
+
+    // Drive
+    if (*y == FLOOR) {
+        *rot = 0;
+        
+        if (input1 & J_RIGHT)  {
+            *d_x += ACCELERATION;
+        }
+        else if (input1 & J_LEFT) {
+            *d_x -= ACCELERATION;
+        }
+        else if (!(input1 & J_B)) {
+            if (*d_x > 0) {
+                *d_x -= ACCELERATION;
+
+                if (*d_x <= 0) {
+                    *d_x = 0;
+                }
+            }
+
+            if (*d_x < 0) {
+                *d_x += ACCELERATION;
+
+                if (*d_x >= 0) {
+                    *d_x = 0;
+                }
+            }
+        }
+    }
+    else {
+        if (input1 & J_RIGHT)  {
+            *rot += ROTATION_SPEED;
+        }
+        else if (input1 & J_LEFT) {
+            *rot -= ROTATION_SPEED;
+        }
+    }
+
+    if (input1 & J_B) {
+        calculate_boost_velocity_vectors(*rot, d_x, d_y);
+    }
+
+    *x += *d_x;
+    *y += *d_y;
+
+    if (*x >= ARENA_X_MAX) {
+        *x = ARENA_X_MAX;
+        *d_x = 0;
+    } 
+    else if (*x <= ARENA_X_MIN) {
+        *x = ARENA_X_MIN;
+        *d_x = 0;
+    }
+
+    if (*y >= FLOOR) {
+        *y = FLOOR;
+        *d_y = 0;
+    } 
+    else if (*y < FLOOR) {
+        *d_y += GRAVITY;
+    }
+
+    if (*y < CEILING) {
+        *y = CEILING;
+        *d_y = 0;
+    }
+}
+
+void tick_ball_physics(
+    UINT8 *ball_x_pos, UINT8 *ball_y_pos, INT8 *ball_d_x, INT8 *ball_d_y,
+    UINT8  plr_x_pos,  UINT8  plr_y_pos,  INT8  plr_d_x,  INT8  plr_d_y,         
+    UINT8  cpu_x_pos,  UINT8  cpu_y_pos,  INT8  cpu_d_x,  INT8  cpu_d_y
+) {
+    if (*ball_d_x > 0) {
+        if (*ball_d_x - ACCELERATION >= 0) {
+            *ball_d_x -= ACCELERATION;
+        }
+        else {
+            *ball_d_x = 0;
+        }
+    } 
+    else if (*ball_d_x < 0) {
+        if (*ball_d_x + ACCELERATION <= 0) {
+            *ball_d_x += ACCELERATION;
+        }
+        else {
+            *ball_d_x = 0;
+        }
+    }
+
+    *ball_d_y += GRAVITY;
+
+    if (*ball_y_pos + *ball_d_y > BALL_FLOOR) {
+        *ball_y_pos = BALL_FLOOR;
+        *ball_d_y = (*ball_d_y * -1) + (BOUNCE_DECAY * GRAVITY);
+
+        if (*ball_d_y > 0) {
+            *ball_d_y = 0;
+        }
+    }
+    else if (*ball_y_pos + *ball_d_y < CEILING) {
+        *ball_d_y *= -1;
+        *ball_y_pos = CEILING;
+    }
+
+    calculate_ball_velocity_vectors(cpu_x_pos, cpu_y_pos, cpu_d_x, cpu_d_y, *ball_x_pos, *ball_y_pos, ball_d_x, ball_d_y);
+    calculate_ball_velocity_vectors(plr_x_pos, plr_y_pos, plr_d_x, plr_d_y, *ball_x_pos, *ball_y_pos, ball_d_x, ball_d_y);
+
+    // Handle overflow errors
+    if (abs(*ball_d_x) >= *ball_x_pos && *ball_d_x < 0) {
+        *ball_x_pos = ARENA_X_MIN;
+        *ball_d_x *= -1;
+    }
+    else if (*ball_d_x + *ball_x_pos > 255) {
+        *ball_x_pos = ARENA_X_MAX;
+        *ball_d_x *= -1;
+    }
+
+    if (*ball_y_pos < abs(*ball_d_y) && *ball_d_y < 0) {
+        *ball_y_pos = CEILING;
+        *ball_d_y *= -1;
+    }
+
+    *ball_x_pos += *ball_d_x;
+    *ball_y_pos += *ball_d_y;
+
+    if (*ball_x_pos > ARENA_X_MAX) {
+        *ball_x_pos = ARENA_X_MAX;
+        *ball_d_x *= -1;
+    }
+    else if (*ball_x_pos < ARENA_X_MIN) {
+        *ball_x_pos = ARENA_X_MIN;
+        *ball_d_x *= -1;
+    }
+}
+
 screen_t title() {
     BGP_REG = fade_palettes[0];
     OBP0_REG = OBP1_REG = 0xE4;
@@ -514,6 +655,9 @@ screen_t game() {
     INT8 key1    = joypad();
     INT8 key2    = key1;
 
+    INT8 cpu_key1 = 0x00;
+    INT8 cpu_key2 = 0x00;
+
     INT8 plr_d_x = 0;
     INT8 plr_d_y = 0;
 
@@ -548,142 +692,20 @@ screen_t game() {
         key2 = key1;
         key1 = joypad();
 
-        // Jump
-        if (debounced_input(J_A, key1, key2) && plr_y_pos == FLOOR) {
-            plr_d_y = -JUMP_ACCELERATION;
-        }
+        cpu_key2 = cpu_key1;
+        cpu_key1 = calculate_cpu_input(cpu_x_pos, cpu_y_pos, cpu_d_x, cpu_d_y, ball_x_pos, ball_y_pos, ball_d_x, ball_d_y);
 
-        // Drive
-        if (plr_y_pos == FLOOR) {
-            plr_rot = 0;
-            
-            if (key1 & J_RIGHT)  {
-                plr_d_x += ACCELERATION;
-            }
-            else if (key1 & J_LEFT) {
-                plr_d_x -= ACCELERATION;
-            }
-            else if (!(key1 & J_B)) {
-                if (plr_d_x > 0) {
-                    plr_d_x -= ACCELERATION;
+        tick_car_physics(&plr_x_pos, &plr_y_pos, &plr_d_x, &plr_d_y, &plr_rot, key1, key2);
+        tick_car_physics(&cpu_x_pos, &cpu_y_pos, &cpu_d_x, &cpu_d_y, &cpu_rot, cpu_key1, cpu_key2);
 
-                    if (plr_d_x <= 0) {
-                        plr_d_x = 0;
-                    }
-                }
-
-                if (plr_d_x < 0) {
-                    plr_d_x += ACCELERATION;
-
-                    if (plr_d_x >= 0) {
-                        plr_d_x = 0;
-                    }
-                }
-            }
-        }
-        else {
-            if (key1 & J_RIGHT)  {
-                plr_rot += ROTATION_SPEED;
-            }
-            else if (key1 & J_LEFT) {
-                plr_rot -= ROTATION_SPEED;
-            }
-        }
-
-        if (key1 & J_B) {
-            calculate_boost_velocity_vectors(plr_rot, &plr_d_x, &plr_d_y);
-        }
-
-        plr_x_pos += plr_d_x;
-        plr_y_pos += plr_d_y;
-
-        if (plr_x_pos >= ARENA_X_MAX) {
-            plr_x_pos = ARENA_X_MAX;
-            plr_d_x = 0;
-        } 
-        else if (plr_x_pos <= ARENA_X_MIN) {
-            plr_x_pos = ARENA_X_MIN;
-            plr_d_x = 0;
-        }
-
-        if (plr_y_pos >= FLOOR) {
-            plr_y_pos = FLOOR;
-            plr_d_y = 0;
-        } 
-        else if (plr_y_pos < FLOOR) {
-            plr_d_y += GRAVITY;
-        }
-
-        if (plr_y_pos < CEILING) {
-            plr_y_pos = CEILING;
-            plr_d_y = 0;
-        }
-
-
-        if (ball_d_x > 0) {
-            if (ball_d_x - ACCELERATION >= 0) {
-                ball_d_x -= ACCELERATION;
-            }
-            else {
-                ball_d_x = 0;
-            }
-        } 
-        else if (ball_d_x < 0) {
-            if (ball_d_x + ACCELERATION <= 0) {
-                ball_d_x += ACCELERATION;
-            }
-            else {
-                ball_d_x = 0;
-            }
-        }
-
-        ball_d_y += GRAVITY;
-
-        if (ball_y_pos + ball_d_y > BALL_FLOOR) {
-            ball_y_pos = BALL_FLOOR;
-            ball_d_y = (ball_d_y * -1) + (BOUNCE_DECAY * GRAVITY);
-
-            if (ball_d_y > 0) {
-                ball_d_y = 0;
-            }
-        }
-        else if (ball_y_pos + ball_d_y < CEILING) {
-            ball_d_y *= -1;
-            ball_y_pos = CEILING;
-        }
-
-        calculate_ball_velocity_vectors(plr_x_pos, plr_y_pos, plr_d_x, plr_d_y, ball_x_pos, ball_y_pos, &ball_d_x, &ball_d_y);
-
-        // Handle overflow errors
-        if (abs(ball_d_x) >= ball_x_pos && ball_d_x < 0) {
-            ball_x_pos = ARENA_X_MIN;
-            ball_d_x *= -1;
-        }
-        else if (ball_d_x + ball_x_pos > 255) {
-            ball_x_pos = ARENA_X_MAX;
-            ball_d_x *= -1;
-        }
-
-        if (ball_y_pos < abs(ball_d_y) && ball_d_y < 0) {
-            ball_y_pos = CEILING;
-            ball_d_y *= -1;
-        }
-
-        ball_x_pos += ball_d_x;
-        ball_y_pos += ball_d_y;
-
-        if (ball_x_pos > ARENA_X_MAX) {
-            ball_x_pos = ARENA_X_MAX;
-            ball_d_x *= -1;
-        }
-        else if (ball_x_pos < ARENA_X_MIN) {
-            ball_x_pos = ARENA_X_MIN;
-            ball_d_x *= -1;
-        }
+        tick_ball_physics(
+            &ball_x_pos, &ball_y_pos, &ball_d_x, &ball_d_y, // Ball data
+             plr_x_pos,   plr_y_pos,   plr_d_x,   plr_d_y,  // Player data
+             cpu_x_pos,   cpu_y_pos,   cpu_d_x,   cpu_d_y   // CPU data
+        );
 
         move_car_sprite(0, plr_x_pos, plr_y_pos, plr_rot);
-        move_car_sprite(1, 64, 64, cpu_rot);
-        draw_boost_sprite(1, 64, 64, cpu_rot, tick % 2);
+        move_car_sprite(1, cpu_x_pos, cpu_y_pos, cpu_rot);
 
         move_ball_sprite(ball_x_pos, ball_y_pos, ball_d_x | ball_d_y ? tick : 0); // Move sprite to position, check if moving for sprite updates
 
@@ -693,7 +715,12 @@ screen_t game() {
             kill_boost_sprite(0);
         }
 
-        cpu_rot += 2; // TODO: Remove
+        if (cpu_key1 & J_B) {
+            draw_boost_sprite(1, cpu_x_pos, cpu_y_pos, cpu_rot, tick % 2);
+        } else {
+            kill_boost_sprite(1);
+        }
+
         tick++;
     }
 }
