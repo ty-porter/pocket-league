@@ -401,11 +401,15 @@ void calculate_boost_velocity_vectors(UINT8 n, UINT8 rot, INT8 *d_x, INT8 *d_y) 
     *d_y += BOOST_ACCELERATION * y_mod;
 }
 
-void calculate_ball_velocity_vectors(UINT8 x, UINT8 y, INT8 d_x, INT8 d_y, UINT8 ball_x, UINT8 ball_y, INT8 *ball_d_x, INT8 *ball_d_y) {
+UINT8 calculate_ball_velocity_vectors(UINT8 x, UINT8 y, INT8 d_x, INT8 d_y, UINT8 ball_x, UINT8 ball_y, INT8 *ball_d_x, INT8 *ball_d_y) {
     if ((x <= ball_x + 16 && x >= ball_x - 16) && (y <= ball_y + 11 && y >= ball_y - 5)) {
         *ball_d_x = d_x * BALL_VELOCITY;
         *ball_d_y = d_y - (BALL_BUMP_VERT * abs(d_x) / 10);
+
+        return 1; // Collision
     }
+    
+    return 0;
 }
 
 UINT8 int_distance(UINT8 x, UINT8 y) {
@@ -526,8 +530,13 @@ void tick_ball_physics(
         *ball_y_pos = CEILING;
     }
 
-    calculate_ball_velocity_vectors(cpu_x_pos, cpu_y_pos, cpu_d_x, cpu_d_y, *ball_x_pos, *ball_y_pos, ball_d_x, ball_d_y);
-    calculate_ball_velocity_vectors(plr_x_pos, plr_y_pos, plr_d_x, plr_d_y, *ball_x_pos, *ball_y_pos, ball_d_x, ball_d_y);
+    UINT8 player_collision = calculate_ball_velocity_vectors(cpu_x_pos, cpu_y_pos, cpu_d_x, cpu_d_y, *ball_x_pos, *ball_y_pos, ball_d_x, ball_d_y);
+    UINT8 cpu_collision = calculate_ball_velocity_vectors(plr_x_pos, plr_y_pos, plr_d_x, plr_d_y, *ball_x_pos, *ball_y_pos, ball_d_x, ball_d_y);
+
+    if (player_collision && cpu_collision) { // Pinch!
+        *ball_d_x += (plr_d_x + cpu_d_x);
+        *ball_d_y += (plr_d_y + cpu_d_y);
+    }
 
     // Handle overflow errors
     if (abs(*ball_d_x) >= *ball_x_pos && *ball_d_x < 0) {
