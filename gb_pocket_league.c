@@ -9,7 +9,9 @@
 #include "sprites/car.c"
 #include "sprites/boost.c"
 #include "sprites/ball.c"
+#include "sprites/cursor.c"
 
+#include "backgrounds/title.h"
 #include "backgrounds/arena.h"
 
 #define FLOOR               140u
@@ -34,6 +36,23 @@
 #define BALL_VELOCITY       2
 #define BALL_BUMP_VERT      10 // Slight upward velocity for hitting the ball
 #define BOUNCE_DECAY        5
+
+typedef enum {
+    TITLE,
+    GAME,
+    CREDITS
+} screen_t;
+
+const unsigned char fade_pallettes[] = {
+    0xFFU, 0xFEU, 0xF9U, 0xE4U,
+};
+
+void load_credits_font() {
+    font_init();
+    font_t credits_font;
+    credits_font = font_load(font_ibm);
+    font_set(credits_font);
+}
 
 /* Rolls the car clockwise based on *rot* param (INT8 0 - 255) */
 void draw_car_roll(INT8 n, UINT8 rot) {
@@ -243,7 +262,20 @@ void initialize_ball() {
     move_ball_sprite(BALL_START_X, BALL_FLOOR, 0);
 }
 
-void initialize_background() {
+void initialize_cursor() {
+    // Set the data
+    set_sprite_data(0, 1, cursor);
+
+    // Set the tile to the sprite
+    set_sprite_tile(0, 0);
+}
+
+void initialize_title_background() {
+    set_bkg_data(0x0, title_tile_count, title_tile_data);
+    set_bkg_tiles(0, 0, title_tile_map_width, title_tile_map_height, title_map_data);
+}
+
+void initialize_game_background() {
     set_bkg_data(0x0, arena_tile_count, arena_tile_data);
     set_bkg_tiles(0, 0, arena_tile_map_width, arena_tile_map_height, arena_map_data);
 }
@@ -305,12 +337,116 @@ void calculate_ball_velocity_vectors(UINT8 x, UINT8 y, INT8 d_x, INT8 d_y, UINT8
     }
 }
 
-void main() {
+screen_t title() {
+    BGP_REG = fade_pallettes[0];
+    OBP0_REG = OBP1_REG = 0xE4;
+
+    SPRITES_8x8;
+
+    // Input
+    // Reading from joypad keeps held inputs from prev. screen from changing to next screen
+    INT8 key1    = joypad();
+    INT8 key2    = key1;
+    UINT8 cursor = 0;
+
+    screen_t next_screen = TITLE;
+
+    initialize_title_background();
+
+    // Fade in the title screen
+    // Hides the tile changes from credits
+    for (INT8 i = 0; i < 4; i++) {
+        BGP_REG = fade_pallettes[i];
+        delay(25);
+    }
+
+    initialize_cursor();
+
+    SHOW_BKG; SHOW_SPRITES;
+
+    while(1) {
+        // Read the keys
+        key2 = key1;
+        key1 = joypad();
+
+        // Move the cursor
+        if (debounced_input(J_DOWN, key1, key2) && cursor != 1) {
+            cursor = 1;
+        }
+
+        if (debounced_input(J_UP, key1, key2) && cursor != 0) {
+            cursor = 0;
+        }
+
+        if (cursor == 0) {
+            move_sprite(0, 60, 77); // Start
+        }
+        else {
+            move_sprite(0, 51, 89); // Credits
+        }
+
+        // Check selection when start is pressed
+        if (debounced_input(J_START, key1, key2)) {
+            // Move the cursor off the screen
+            move_sprite(0, 255, 255);
+
+            if (cursor == 0) {
+                // Here we go!
+                next_screen = GAME;
+                return next_screen;
+            }
+
+            if (cursor == 1) {
+                // Credits
+                next_screen = CREDITS;
+                return next_screen;
+            }
+        }
+    }
+}
+
+screen_t credits() {
     BGP_REG = OBP0_REG = OBP1_REG = 0xE4;
 
     SPRITES_8x8;
 
-    initialize_background();
+    // Make sure the font tiles are initialized in GB mem
+    load_credits_font();
+
+    screen_t next_screen = TITLE;
+    
+    INT8 key1 = joypad();
+    INT8 key2 = key1;
+
+    SHOW_BKG; SHOW_SPRITES;
+
+    printf("  POCKET LEAGUE(c)  \n");
+    printf(" 2021  Tyler Porter \n");
+    printf("                    \n");
+    printf(" Distributed  under \n");
+    printf("    MIT  License    \n");
+    printf("                  \n\n"); 
+    printf("https://github.com/ \n");
+    printf("ty-porter/          \n");
+    printf("gb-pocket-league      ");
+
+    while(1) {
+        // Read the keys
+        key2 = key1;
+        key1 = joypad();
+
+        if (debounced_input(J_START, key1, key2) ) {
+            return next_screen;
+        }
+    }
+}
+
+screen_t game() {
+    BGP_REG = OBP0_REG = OBP1_REG = 0xE4;
+
+    SPRITES_8x8;
+
+    initialize_game_background();
     initialize_cars(NUM_CARS);
     initialize_ball();
 
@@ -489,5 +625,26 @@ void main() {
         }
 
         tick++;
+    }
+}
+
+void main() {
+    BGP_REG = OBP0_REG = OBP1_REG = 0xE4;
+
+    SPRITES_8x8;
+
+    // Current screen, defaults to TITLE
+    screen_t current_screen = TITLE;
+
+    while(1) {
+        if (current_screen == TITLE) {
+            current_screen = title();
+        }
+        else if (current_screen == GAME) {
+            current_screen = game();
+        }
+        else if (current_screen == CREDITS) {
+            current_screen = credits();
+        }
     }
 }
