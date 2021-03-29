@@ -8,6 +8,7 @@
 
 #include "sprites/car.c"
 #include "sprites/boost.c"
+#include "sprites/player_tags.c"
 #include "sprites/ball.c"
 #include "sprites/cursor.c"
 
@@ -265,12 +266,19 @@ void move_car_sprite(UINT8 n, UINT8 x, UINT8 y, UINT8 rot) {
     move_sprite(2 + spr_offset, x + 8, y    );
     move_sprite(3 + spr_offset, x + 8, y + 8);
 
+    if (n == 0) {
+        move_sprite(14, x + 4, y + 12);
+    } else {
+        move_sprite(15, x + 4, y + 12);
+    }
+
     draw_car_roll(n, rot);
 }
 
 void initialize_cars(INT8 n) {
     set_sprite_data(0, 24, car);
     set_sprite_data(25, 4, boost);
+    set_sprite_data(32, 2, player_tags);
 
     for(INT8 i = 0; i < n; i++) {
         for(INT8 j = 0; j < 4; j++) {
@@ -282,9 +290,11 @@ void initialize_cars(INT8 n) {
         }
 
         if (i == 0) {
+            set_sprite_tile(14, 32); // Player Tag 1
             move_car_sprite(i, CAR_1_START_X, CAR_1_START_y, 0);
         } 
         else if (i == 1) {
+            set_sprite_tile(15, 33); // Player Tag 2
             move_car_sprite(i, CAR_2_START_X, CAR_2_START_Y, 0);
         }
     }
