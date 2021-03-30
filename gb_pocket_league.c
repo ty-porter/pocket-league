@@ -11,33 +11,44 @@
 #include "sprites/player_tags.c"
 #include "sprites/ball.c"
 #include "sprites/cursor.c"
+#include "sprites/numbers.c"
 
 #include "backgrounds/title.h"
 #include "backgrounds/arena.h"
 
+#define CPU_DISABLED        0 // Debug flag, 1 disables CPU inputs
+
 #define FLOOR               140u
 #define CEILING             24u
 #define GAME_SPEED          3 // Higher is slower
-#define BALL_FLOOR          136u    
+#define BALL_FLOOR          136u
+#define MAX_SCORE           5
 
 #define ARENA_X_MIN         16
 #define ARENA_X_MAX         144
+#define GOAL_Y_MIN          53
+#define GOAL_Y_MAX          83
+#define SCORE_Y_POS         93
 
 #define GRAVITY             1
 #define JUMP_ACCELERATION   10
 #define ACCELERATION        1
 #define ROTATION_SPEED      15
 #define BOOST_ACCELERATION  1
+#define GOAL_EXPL_VELOCITY  15
 
 #define NUM_CARS            2
 #define CAR_1_START_X       20
 #define CAR_1_START_y       136
-#define CAR_2_START_X       120
+#define CAR_2_START_X       140
 #define CAR_2_START_Y       136
+
+#define COUNTDOWN_X         84
+#define COUNTDOWN_Y         60
 
 #define BALL_START_X        80
 #define BALL_VELOCITY       2
-#define BALL_BUMP_VERT      10 // Slight upward velocity for hitting the ball
+#define BALL_BUMP_VERT      7 // Slight upward velocity for hitting the ball
 #define BOUNCE_DECAY        5
 
 #define CPU_PREDICTION      5 // How many ticks to spend predicting ball position
@@ -45,14 +56,16 @@
 typedef enum {
     TITLE,
     GAME,
-    CREDITS
+    CREDITS,
+    PLAYER_WINS,
+    CPU_WINS
 } screen_t;
 
 const unsigned char fade_palettes[] = {
     0xFFU, 0xFEU, 0xF9U, 0xE4U,
 };
 
-void load_credits_font() {
+void load_font() {
     font_init();
     font_t credits_font;
     credits_font = font_load(font_ibm);
@@ -335,6 +348,24 @@ void initialize_cursor() {
 
     // Set the tile to the sprite
     set_sprite_tile(0, 0);
+
+    // Kill any leftover properties
+    set_sprite_prop(0, 0x00);
+}
+
+void initialize_score(UINT8 plr_score, UINT8 cpu_score) {
+    set_sprite_data(34, 12, numbers);
+
+    set_sprite_tile(17, 40 + plr_score);
+    set_sprite_tile(18, 40 + cpu_score);
+
+    move_sprite(17, 8, SCORE_Y_POS + 8);
+    move_sprite(18, 160, SCORE_Y_POS + 8);
+}
+
+void initialize_countdown() {
+    set_sprite_tile(16, 36);
+    move_sprite(16, COUNTDOWN_X, COUNTDOWN_Y);
 }
 
 void initialize_title_background() {
@@ -538,14 +569,23 @@ void tick_ball_physics(
         *ball_d_y += (plr_d_y + cpu_d_y);
     }
 
-    // Handle overflow errors
-    if (abs(*ball_d_x) >= *ball_x_pos && *ball_d_x < 0) {
-        *ball_x_pos = ARENA_X_MIN;
-        *ball_d_x *= -1;
-    }
-    else if (*ball_d_x + *ball_x_pos > 255) {
-        *ball_x_pos = ARENA_X_MAX;
-        *ball_d_x *= -1;
+    UINT8 in_goal = (*ball_y_pos > GOAL_Y_MIN && *ball_y_pos < GOAL_Y_MAX);
+
+    if (!in_goal) { // Goal conditions! Skip overflow checks and keep the ball moving.
+        // Handle overflow errors
+        if (abs(*ball_d_x) >= *ball_x_pos && *ball_d_x < 0) {
+            *ball_x_pos = ARENA_X_MIN;
+            *ball_d_x *= -1;
+        }
+        else if (*ball_d_x + *ball_x_pos > 255) {
+            *ball_x_pos = ARENA_X_MAX;
+            *ball_d_x *= -1;
+        }
+    } else {
+        if (abs(*ball_d_x) >= *ball_x_pos && *ball_d_x < 0) {
+            *ball_x_pos = 0;
+            *ball_d_x *= 0;
+        }
     }
 
     if (*ball_y_pos < abs(*ball_d_y) && *ball_d_y < 0) {
@@ -556,13 +596,15 @@ void tick_ball_physics(
     *ball_x_pos += *ball_d_x;
     *ball_y_pos += *ball_d_y;
 
-    if (*ball_x_pos > ARENA_X_MAX) {
-        *ball_x_pos = ARENA_X_MAX;
-        *ball_d_x *= -1;
-    }
-    else if (*ball_x_pos < ARENA_X_MIN) {
-        *ball_x_pos = ARENA_X_MIN;
-        *ball_d_x *= -1;
+    if (!in_goal) { // Goal conditions! Skip bounce checks and keep the ball moving.
+        if (*ball_x_pos > ARENA_X_MAX) {
+            *ball_x_pos = ARENA_X_MAX;
+            *ball_d_x *= -1;
+        }
+        else if (*ball_x_pos < ARENA_X_MIN) {
+            *ball_x_pos = ARENA_X_MIN;
+            *ball_d_x *= -1;
+        }
     }
 }
 
@@ -642,6 +684,12 @@ INT8 calculate_cpu_input(UINT8 x, UINT8 y, UINT8 rot, UINT8 ball_x, UINT8 ball_y
     return input;
 }
 
+void hide_everything() {
+    for (UINT8 i = 0; i < 40; i++) {
+        move_sprite(i, 255, 255);
+    }
+}
+
 screen_t title() {
     BGP_REG = fade_palettes[0];
     OBP0_REG = OBP1_REG = 0xE4;
@@ -714,7 +762,7 @@ screen_t credits() {
     SPRITES_8x8;
 
     // Make sure the font tiles are initialized in GB mem
-    load_credits_font();
+    load_font();
 
     screen_t next_screen = TITLE;
     
@@ -755,8 +803,8 @@ screen_t game() {
 
     SHOW_BKG; SHOW_SPRITES;
 
-    INT8 key1    = joypad();
-    INT8 key2    = key1;
+    INT8 key1 = 0x00;
+    INT8 key2 = 0x00;
 
     INT8 cpu_key1 = 0x00;
     INT8 cpu_key2 = 0x00;
@@ -783,34 +831,154 @@ screen_t game() {
     UINT8 cpu_rot = 0;
     UINT8 tick = 0;
 
+    UINT8 plr_goal = 0;
+    UINT8 cpu_goal = 0;
+
+    UINT8 score_flag = 0; // Not scored yet
+    UINT8 controls_enabled = 0; // Disable before countdown
+    UINT8 countdown = 3;
+
+    UINT8 reset_flag = 1; // Reset the game for next play
+    UINT8 reset_countdown = 0; // How long to wait before resetting
+
     while(1) {
         wait_vbl_done();
+        
+        if (reset_flag) {
+            initialize_score(plr_goal, cpu_goal);
+            initialize_countdown();
+
+            key1 = 0x00;
+            key2 = 0x00;
+
+            cpu_key1 = 0x00;
+            cpu_key2 = 0x00;
+
+            plr_d_x = 0;
+            plr_d_y = 0;
+
+            cpu_d_x = 0;
+            cpu_d_y = 0;
+
+            ball_d_x = 0;
+            ball_d_y = 0;
+
+            plr_x_pos = CAR_1_START_X;
+            plr_y_pos = CAR_1_START_y;
+
+            cpu_x_pos = CAR_2_START_X;
+            cpu_y_pos = CAR_2_START_Y;
+
+            ball_x_pos = BALL_START_X;
+            ball_y_pos = BALL_FLOOR;
+
+            plr_rot = 0;
+            cpu_rot = 0;
+            tick = 0;
+
+            score_flag = 0;
+            controls_enabled = 0;
+            countdown = 3;
+            reset_flag = 0;
+            reset_countdown = 0;
+        }
 
         if (tick % GAME_SPEED != 0) {
             tick++;
             continue;
         }
 
-        // Read the keys
-        key2 = key1;
-        key1 = joypad();
+        if (controls_enabled) {
+            // Read the keys
+            key2 = key1;
+            key1 = joypad();
 
-        cpu_key2 = cpu_key1;
-        cpu_key1 = calculate_cpu_input(cpu_x_pos, cpu_y_pos, cpu_rot, ball_x_pos, ball_y_pos, ball_d_x, ball_d_y);
+            if (CPU_DISABLED != 1) {
+                cpu_key2 = cpu_key1;
+                cpu_key1 = calculate_cpu_input(cpu_x_pos, cpu_y_pos, cpu_rot, ball_x_pos, ball_y_pos, ball_d_x, ball_d_y);
+            }
+
+            if (score_flag) { // Kill CPU controls after scoring
+                cpu_key1 = 0x00;
+                cpu_key2 = 0x00;
+            }
+        }
+        else {
+            if ((tick + 1) % 25 == 0) {
+                countdown--;
+            }
+
+            if (countdown < 1) { // Start the game!
+                move_sprite(16, 255, 255);
+                controls_enabled = 1;
+            } 
+            else {
+                set_sprite_tile(16, 34 + countdown);
+            }
+        }
+
+        if (score_flag) {
+            ball_x_pos = 255;
+            ball_y_pos = 255;
+            ball_d_x = 0;
+            ball_d_y = 0;
+
+            if ((tick + 1) % 25 == 0) {
+                reset_countdown--;
+            }
+
+            if (reset_countdown < 1) {
+                reset_flag = 1;
+
+                if (cpu_goal >= MAX_SCORE || plr_goal >= MAX_SCORE) {
+                    hide_everything();
+
+                    if (cpu_goal > plr_goal) {
+                        return CPU_WINS;
+                    }
+                    else {
+                        return PLAYER_WINS;
+                    }
+                }
+            }
+        }
 
         tick_car_physics(0, &plr_x_pos, &plr_y_pos, &plr_d_x, &plr_d_y, &plr_rot, key1,     key2);
         tick_car_physics(1, &cpu_x_pos, &cpu_y_pos, &cpu_d_x, &cpu_d_y, &cpu_rot, cpu_key1, cpu_key2);
 
-        tick_ball_physics(
-            &ball_x_pos, &ball_y_pos, &ball_d_x, &ball_d_y, // Ball data
-             plr_x_pos,   plr_y_pos,   plr_d_x,   plr_d_y,  // Player data
-             cpu_x_pos,   cpu_y_pos,   cpu_d_x,   cpu_d_y   // CPU data
-        );
+        if (score_flag == 0) {
+            tick_ball_physics(
+                &ball_x_pos, &ball_y_pos, &ball_d_x, &ball_d_y, // Ball data
+                 plr_x_pos,   plr_y_pos,   plr_d_x,   plr_d_y,  // Player data
+                 cpu_x_pos,   cpu_y_pos,   cpu_d_x,   cpu_d_y   // CPU data
+            );
+        }
 
         move_car_sprite(0, plr_x_pos, plr_y_pos, plr_rot);
         move_car_sprite(1, cpu_x_pos, cpu_y_pos, cpu_rot);
 
         move_ball_sprite(ball_x_pos, ball_y_pos, ball_d_x | ball_d_y ? tick : 0); // Move sprite to position, check if moving for sprite updates
+
+        if (ball_x_pos < ARENA_X_MIN - 8 && !score_flag) { // In the left goal!
+            cpu_goal += 1;
+            score_flag = 1;
+            reset_countdown = 3;
+
+            set_sprite_tile(18, 40 + cpu_goal);
+
+            plr_d_x = GOAL_EXPL_VELOCITY;
+            cpu_d_x = GOAL_EXPL_VELOCITY;
+        } 
+        else if (ball_x_pos > ARENA_X_MAX + 8 && !score_flag) { // In the right goal!
+            plr_goal += 1;
+            score_flag = 1;
+            reset_countdown = 3;
+
+            set_sprite_tile(17, 40 + plr_goal);
+
+            plr_d_x = -GOAL_EXPL_VELOCITY;
+            cpu_d_x = -GOAL_EXPL_VELOCITY;
+        }
 
         if (key1 & J_B) {
             draw_boost_sprite(0, plr_x_pos, plr_y_pos, plr_rot, tick % 2);
@@ -825,6 +993,40 @@ screen_t game() {
         }
 
         tick++;
+    }
+}
+
+screen_t game_end(screen_t type) {
+    BGP_REG = OBP0_REG = OBP1_REG = 0xE4;
+
+    SPRITES_8x8;
+
+    load_font();
+
+    SHOW_BKG; SHOW_SPRITES;
+
+    while(1) {
+        delay(500);
+
+        if (type == PLAYER_WINS) {
+            printf("                    \n");
+            printf("        Wow!        \n");
+            delay(1000);
+            printf("     Calculated.    \n");
+            delay(2000);
+            printf("      YOU  WIN      \n");
+        } else {
+            printf("                    \n");
+            printf("    What a save!    \n");
+            delay(1000);
+            printf("       Sorry!       \n");
+            delay(2000);
+            printf("      YOU LOSE      \n");
+        }
+
+        delay(3000);
+
+        return TITLE;
     }
 }
 
@@ -845,6 +1047,9 @@ void main() {
         }
         else if (current_screen == CREDITS) {
             current_screen = credits();
+        }
+        else if (current_screen == PLAYER_WINS || current_screen == CPU_WINS) {
+            current_screen = game_end(current_screen);
         }
     }
 }
