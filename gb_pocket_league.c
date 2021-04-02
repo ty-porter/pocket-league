@@ -13,10 +13,14 @@
 #include "sprites/cursor.c"
 #include "sprites/numbers.c"
 
+// Debug pixels for hitboxes
+#include "sprites/pixel.c"
+
 #include "backgrounds/title.h"
 #include "backgrounds/arena.h"
 
-#define CPU_DISABLED        0 // Debug flag, 1 disables CPU inputs
+#define CPU_DISABLED        1 // Debug flag, 1 disables CPU inputs
+#define HITBOXES_ENABLED    1 // Weird things can happen, use at risk
 
 #define FLOOR               140u
 #define CEILING             24u
@@ -72,9 +76,13 @@ void load_font() {
     font_set(credits_font);
 }
 
+UINT8 rotation_quadrant(UINT8 rot) {
+    return rot / 32;
+}
+
 /* Rolls the car clockwise based on *rot* param (INT8 0 - 255) */
 void draw_car_roll(INT8 n, UINT8 rot) {
-    UINT8 quadrant = rot / 32;
+    UINT8 quadrant = rotation_quadrant(rot);
 
     UINT8 invert_x = 0;
     UINT8 invert_y = 0;
@@ -192,7 +200,7 @@ void draw_boost_sprite(UINT8 n, UINT8 x, UINT8 y, UINT8 rot, UINT8 t) {
     INT8 y_o = 0;
     UINT8 tick_prop = 0x00;
     UINT8 mod_prop = 0x00;
-    UINT8 quadrant = rot / 32;
+    UINT8 quadrant = rotation_quadrant(rot);
 
     unsigned char cpu_offset[] = { 4, 5, 6, 7, 0, 1, 2, 3 };
 
@@ -269,6 +277,60 @@ void draw_boost_sprite(UINT8 n, UINT8 x, UINT8 y, UINT8 rot, UINT8 t) {
 
 void kill_boost_sprite(UINT8 n) {
     move_sprite((n * 5) + 4, 255, 255); // offscreen
+}
+
+void calculate_car_hitbox(UINT8 x, UINT8 y, UINT8 rot, UINT8 *x1, UINT8 *y1, UINT8 *x2, UINT8 *y2) {
+    UINT8 quadrant = rotation_quadrant(rot);
+    
+    if (quadrant == 0) {
+        *x1 = x;
+        *x2 = x + 15;
+        *y1 = y + 6;
+        *y2 = y + 10;
+    }
+}
+
+void calculate_ball_hitbox(UINT8 x, UINT8 y, UINT8 *x1, UINT8 *y1, UINT8 *x2, UINT8 *y2) {
+        *x1 = x;
+        *x2 = x + 15;
+        *y1 = y;
+        *y2 = y + 15;
+}
+
+void draw_car_hitbox(UINT8 x, UINT8 y, UINT8 rot) {
+    UINT8 x1 = x;
+    UINT8 x2 = x;
+    UINT8 y1 = y;
+    UINT8 y2 = y;
+
+    calculate_car_hitbox(x, y, rot, &x1, &y1, &x2, &y2);
+
+    for (INT8 i = 0; i < 4; i++) {
+        set_sprite_tile(23 + i, 47);
+    }
+
+    move_sprite(23, x1, y1);
+    move_sprite(24, x1, y2);
+    move_sprite(25, x2, y1);
+    move_sprite(26, x2, y2);
+}
+
+void draw_ball_hitbox(UINT8 x, UINT8 y) {
+    UINT8 x1 = x;
+    UINT8 x2 = x;
+    UINT8 y1 = y;
+    UINT8 y2 = y;
+
+    calculate_ball_hitbox(x, y, &x1, &y1, &x2, &y2);
+
+    for (INT8 i = 0; i < 4; i++) {
+        set_sprite_tile(i + 19, 47);
+    }
+
+    move_sprite(19, x1, y1);
+    move_sprite(20, x1, y2);
+    move_sprite(21, x2, y1);
+    move_sprite(22, x2, y2);
 }
 
 void move_car_sprite(UINT8 n, UINT8 x, UINT8 y, UINT8 rot) {
@@ -379,7 +441,7 @@ void initialize_game_background() {
 }
 
 void calculate_boost_velocity_vectors(UINT8 n, UINT8 rot, INT8 *d_x, INT8 *d_y) {
-    UINT8 quadrant = rot / 32;
+    UINT8 quadrant = rotation_quadrant(rot);
     INT8 x_mod = 0;
     INT8 y_mod = 0;
 
@@ -677,7 +739,7 @@ INT8 calculate_cpu_input(UINT8 x, UINT8 y, UINT8 rot, UINT8 ball_x, UINT8 ball_y
 
     quadrant = calculate_ball_quadrant(x, y, ball_x, ball_y);
 
-    if (rot / 32 == quadrant) {
+    if (rotation_quadrant(rot) == quadrant) {
         input = input | J_B;
     }
 
@@ -800,6 +862,10 @@ screen_t game() {
     initialize_game_background();
     initialize_cars(NUM_CARS);
     initialize_ball();
+
+    if (HITBOXES_ENABLED) {
+        set_sprite_data(47, 1, pixel);
+    }
 
     SHOW_BKG; SHOW_SPRITES;
 
@@ -990,6 +1056,11 @@ screen_t game() {
             draw_boost_sprite(1, cpu_x_pos, cpu_y_pos, cpu_rot, tick % 2);
         } else {
             kill_boost_sprite(1);
+        }
+
+        if (HITBOXES_ENABLED) { // Overlay the hitbox
+            draw_car_hitbox(plr_x_pos, plr_y_pos, plr_rot);
+            draw_ball_hitbox(ball_x_pos, ball_y_pos);
         }
 
         tick++;
