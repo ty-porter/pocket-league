@@ -279,40 +279,86 @@ void kill_boost_sprite(UINT8 n) {
     move_sprite((n * 5) + 4, 255, 255); // offscreen
 }
 
-void calculate_car_hitbox(UINT8 x, UINT8 y, UINT8 rot, UINT8 *x1, UINT8 *y1, UINT8 *x2, UINT8 *y2) {
-    UINT8 quadrant = rotation_quadrant(rot);
-    
-    if (quadrant == 0) {
-        *x1 = x;
-        *x2 = x + 15;
-        *y1 = y + 6;
-        *y2 = y + 10;
-    }
+void calculate_ball_hitbox(UINT8 x, UINT8 y, UINT8 *x1, UINT8 *y1, UINT8 *x2, UINT8 *y2) {
+    *x1 = x;
+    *x2 = x + 15;
+    *y1 = y;
+    *y2 = y + 15;
 }
 
-void calculate_ball_hitbox(UINT8 x, UINT8 y, UINT8 *x1, UINT8 *y1, UINT8 *x2, UINT8 *y2) {
-        *x1 = x;
-        *x2 = x + 15;
-        *y1 = y;
-        *y2 = y + 15;
+UINT8 * calculate_car_hitbox(UINT8 x, UINT8 y, UINT8 rot) {
+    UINT8 quadrant = rotation_quadrant(rot);
+    UINT8 hitbox[12] = { 
+        255, 255, 255, 255,
+        255, 255, 255, 255,
+        255, 255, 255, 255
+    };
+
+    if (quadrant == 0 || quadrant == 4) {
+        hitbox[0] = x;
+        hitbox[1] = x + 15;
+        hitbox[2] = y + 6;
+        hitbox[3] = y + 10;
+    }
+    else if (quadrant == 1 || quadrant == 5) {
+        hitbox[0] = x + 2;
+        hitbox[1] = x + 8;
+        hitbox[2] = y + 1;
+        hitbox[3] = y + 7;
+
+        hitbox[4] = x + 5;
+        hitbox[5] = x + 11;
+        hitbox[6] = y + 4;
+        hitbox[7] = y + 11;
+
+        hitbox[8] = x + 8;
+        hitbox[9] = x + 13;
+        hitbox[10] = y + 10;
+        hitbox[11] = y + 14;
+    }
+    else if (quadrant == 3 || quadrant == 7) {
+        hitbox[0] = x + 8;
+        hitbox[1] = x + 14;
+        hitbox[2] = y + 2;
+        hitbox[3] = y + 6;
+
+        hitbox[4] = x + 4;
+        hitbox[5] = x + 11;
+        hitbox[6] = y + 4;
+        hitbox[7] = y + 11;
+
+        hitbox[8] = x + 1;
+        hitbox[9] = x + 6;
+        hitbox[10] = y + 10;
+        hitbox[11] = y + 13;
+    }
+    else if (quadrant == 2 || quadrant == 6) {
+        hitbox[0] = x + 6;
+        hitbox[1] = x + 10;
+        hitbox[2] = y;
+        hitbox[3] = y + 15;
+    }
+
+    return hitbox;
 }
 
 void draw_car_hitbox(UINT8 x, UINT8 y, UINT8 rot) {
-    UINT8 x1 = x;
-    UINT8 x2 = x;
-    UINT8 y1 = y;
-    UINT8 y2 = y;
+    UINT8 *hitbox;
 
-    calculate_car_hitbox(x, y, rot, &x1, &y1, &x2, &y2);
+    hitbox = calculate_car_hitbox(x, y, rot);
 
-    for (INT8 i = 0; i < 4; i++) {
-        set_sprite_tile(23 + i, 47);
+    for (INT8 i = 0; i < 3; i++) {
+        for (INT8 j = 0; j < 4; j++) {
+            set_sprite_tile(23 + (4 * i) + j, 47);
+
+            move_sprite(23 + (4 * i), hitbox[4 * i    ], hitbox[4 * i + 2]);
+            move_sprite(24 + (4 * i), hitbox[4 * i    ], hitbox[4 * i + 3]);
+            move_sprite(25 + (4 * i), hitbox[4 * i + 1], hitbox[4 * i + 2]);
+            move_sprite(26 + (4 * i), hitbox[4 * i + 1], hitbox[4 * i + 3]);
+        }
     }
 
-    move_sprite(23, x1, y1);
-    move_sprite(24, x1, y2);
-    move_sprite(25, x2, y1);
-    move_sprite(26, x2, y2);
+    move_sprite(14, 255, 255); // Move player tag offscreen
 }
 
 void draw_ball_hitbox(UINT8 x, UINT8 y) {
