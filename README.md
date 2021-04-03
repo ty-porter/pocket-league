@@ -1,6 +1,6 @@
 # gb-pocket-league
 
-![VERSION](https://img.shields.io/badge/Version-0.0.1-green)
+![VERSION](https://img.shields.io/badge/Version-0.1.0-green)
 
 A work-in-progress port of [Rocket League](https://www.rocketleague.com/) to the GameBoy (Pocket)!
 
