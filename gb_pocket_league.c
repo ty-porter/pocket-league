@@ -19,8 +19,8 @@
 #include "backgrounds/title.h"
 #include "backgrounds/arena.h"
 
-#define CPU_DISABLED        1 // Debug flag, 1 disables CPU inputs
-#define HITBOXES_ENABLED    1 // Weird things can happen, use at risk
+#define CPU_DISABLED        0 // Debug flag, 1 disables CPU inputs
+#define HITBOXES_ENABLED    0 // Weird things can happen, use at risk
 
 #define FLOOR               140u
 #define CEILING             24u
@@ -540,8 +540,63 @@ void calculate_boost_velocity_vectors(UINT8 n, UINT8 rot, INT8 *d_x, INT8 *d_y) 
     *d_y += BOOST_ACCELERATION * y_mod;
 }
 
-UINT8 calculate_ball_velocity_vectors(UINT8 x, UINT8 y, INT8 d_x, INT8 d_y, UINT8 ball_x, UINT8 ball_y, INT8 *ball_d_x, INT8 *ball_d_y) {
-    if ((x <= ball_x + 16 && x >= ball_x - 16) && (y <= ball_y + 11 && y >= ball_y - 5)) {
+UINT8 max(UINT8 a, UINT8 b) {
+    if (a > b) {
+        return a;
+    } else {
+        return b;
+    }
+}
+
+UINT8 min(UINT8 a, UINT8 b) {
+    if (a < b) {
+        return a;
+    } else {
+        return b;
+    }
+}
+
+UINT8 detect_collision(UINT8 x, UINT8 y, UINT8 rot, UINT8 ball_x, UINT8 ball_y) {
+    UINT8 *car_hitbox;
+    
+    car_hitbox = calculate_car_hitbox(x, y, rot);
+    UINT8 ball_x1;
+    UINT8 ball_x2;
+    UINT8 ball_y1;
+    UINT8 ball_y2;
+
+    UINT8 hitbox_x1;
+    UINT8 hitbox_x2;
+    UINT8 hitbox_y1;
+    UINT8 hitbox_y2;
+
+    calculate_ball_hitbox(ball_x, ball_y, &ball_x1, &ball_y1, &ball_x2, &ball_y2);
+
+    for (INT8 i = 0; i < 3; i++) { // Iterate through the possible hitboxes
+        if (car_hitbox[4 * i] == 255) { // Blank hitbox
+            continue;
+        }
+
+        hitbox_x1 = car_hitbox[4 * i];
+        hitbox_x2 = car_hitbox[4 * i + 1];
+        hitbox_y1 = car_hitbox[4 * i + 2];
+        hitbox_y2 = car_hitbox[4 * i + 3];
+
+        if (max(hitbox_x1, hitbox_x2) >= min(ball_x1, ball_x2) && min(hitbox_x1, hitbox_x2) <= max(ball_x1, ball_x2)) {
+            if (max(hitbox_y1, hitbox_y2) >= min(ball_y1, ball_y2) && min(hitbox_y1, hitbox_y2) <= max(ball_y1, ball_y2)) {
+                return 1;
+            }
+        }
+    }
+
+    return 0; // Default to FALSE
+}
+
+UINT8 calculate_ball_velocity_vectors(UINT8 x, UINT8 y, INT8 d_x, INT8 d_y, UINT8 rot, UINT8 ball_x, UINT8 ball_y, INT8 *ball_d_x, INT8 *ball_d_y) {
+    UINT8 collision = detect_collision(x, y, rot, ball_x, ball_y);
+
+    // if ((x <= ball_x + 16 && x >= ball_x - 16) && (y <= ball_y + 11 && y >= ball_y - 5)) {
+    if (collision == 1) {
         *ball_d_x = d_x * BALL_VELOCITY;
         *ball_d_y = d_y - (BALL_BUMP_VERT * abs(d_x) / 10);
 
@@ -634,8 +689,8 @@ void tick_car_physics(UINT8 n, UINT8 *x, UINT8 *y, INT8 *d_x, INT8 *d_y, UINT8 *
 
 void tick_ball_physics(
     UINT8 *ball_x_pos, UINT8 *ball_y_pos, INT8 *ball_d_x, INT8 *ball_d_y,
-    UINT8  plr_x_pos,  UINT8  plr_y_pos,  INT8  plr_d_x,  INT8  plr_d_y,         
-    UINT8  cpu_x_pos,  UINT8  cpu_y_pos,  INT8  cpu_d_x,  INT8  cpu_d_y
+    UINT8  plr_x_pos,  UINT8  plr_y_pos,  INT8  plr_d_x,  INT8  plr_d_y,  UINT8 plr_rot,
+    UINT8  cpu_x_pos,  UINT8  cpu_y_pos,  INT8  cpu_d_x,  INT8  cpu_d_y,  UINT8 cpu_rot
 ) {
     if (*ball_d_x > 0) {
         if (*ball_d_x - ACCELERATION >= 0) {
@@ -669,8 +724,8 @@ void tick_ball_physics(
         *ball_y_pos = CEILING;
     }
 
-    UINT8 player_collision = calculate_ball_velocity_vectors(cpu_x_pos, cpu_y_pos, cpu_d_x, cpu_d_y, *ball_x_pos, *ball_y_pos, ball_d_x, ball_d_y);
-    UINT8 cpu_collision = calculate_ball_velocity_vectors(plr_x_pos, plr_y_pos, plr_d_x, plr_d_y, *ball_x_pos, *ball_y_pos, ball_d_x, ball_d_y);
+    UINT8 player_collision = calculate_ball_velocity_vectors(cpu_x_pos, cpu_y_pos, cpu_d_x, cpu_d_y, cpu_rot, *ball_x_pos, *ball_y_pos, ball_d_x, ball_d_y);
+    UINT8 cpu_collision = calculate_ball_velocity_vectors(plr_x_pos, plr_y_pos, plr_d_x, plr_d_y, plr_rot, *ball_x_pos, *ball_y_pos, ball_d_x, ball_d_y);
 
     if (player_collision && cpu_collision) { // Pinch!
         *ball_d_x += (plr_d_x + cpu_d_x);
@@ -755,8 +810,8 @@ INT8 calculate_cpu_input(UINT8 x, UINT8 y, UINT8 rot, UINT8 ball_x, UINT8 ball_y
     while (counter < CPU_PREDICTION) {
         tick_ball_physics(
             &ball_x, &ball_y, &ball_d_x, &ball_d_y,
-            255, 255, 255, 255,
-            255, 255, 255, 255
+            255, 255, 255, 255, 0,
+            255, 255, 255, 255, 0
         );
 
         counter++;
@@ -1060,9 +1115,9 @@ screen_t game() {
 
         if (score_flag == 0) {
             tick_ball_physics(
-                &ball_x_pos, &ball_y_pos, &ball_d_x, &ball_d_y, // Ball data
-                 plr_x_pos,   plr_y_pos,   plr_d_x,   plr_d_y,  // Player data
-                 cpu_x_pos,   cpu_y_pos,   cpu_d_x,   cpu_d_y   // CPU data
+                &ball_x_pos, &ball_y_pos, &ball_d_x, &ball_d_y,          // Ball data
+                 plr_x_pos,   plr_y_pos,   plr_d_x,   plr_d_y,  plr_rot, // Player data
+                 cpu_x_pos,   cpu_y_pos,   cpu_d_x,   cpu_d_y,  cpu_rot  // CPU data
             );
         }
 
