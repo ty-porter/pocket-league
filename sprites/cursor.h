@@ -26,6 +26,6 @@
 /* Bank of tiles. */
 #define cursorBank 0
 /* Start of tile array. */
-extern unsigned char cursor[];
+extern const unsigned char cursor[];
 
 /* End of CURSOR.H */

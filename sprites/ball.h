@@ -26,6 +26,6 @@
 /* Bank of tiles. */
 #define ballBank 0
 /* Start of tile array. */
-extern unsigned char ball[];
+extern const unsigned char ball[];
 
 /* End of BALL.H */
