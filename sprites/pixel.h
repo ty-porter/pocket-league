@@ -26,6 +26,6 @@
 /* Bank of tiles. */
 #define pixelBank 0
 /* Start of tile array. */
-extern unsigned char pixel[];
+extern const unsigned char pixel[];
 
 /* End of PIXEL.H */

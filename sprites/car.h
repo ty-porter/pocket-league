@@ -26,6 +26,6 @@
 /* Bank of tiles. */
 #define carBank 0
 /* Start of tile array. */
-extern unsigned char car[];
+extern const unsigned char car[];
 
 /* End of CAR.H */
