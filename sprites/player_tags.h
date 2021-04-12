@@ -26,6 +26,6 @@
 /* Bank of tiles. */
 #define player_tagsBank 0
 /* Start of tile array. */
-extern unsigned char player_tags[];
+extern const unsigned char player_tags[];
 
 /* End of PLAYER_TAGS.H */

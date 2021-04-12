@@ -26,6 +26,6 @@
 /* Bank of tiles. */
 #define numbersBank 0
 /* Start of tile array. */
-extern unsigned char numbers[];
+extern const unsigned char numbers[];
 
 /* End of NUMBERS.H */

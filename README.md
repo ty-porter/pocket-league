@@ -1,6 +1,6 @@
 # gb-pocket-league
 
-![VERSION](https://img.shields.io/badge/Version-0.0.1-green)
+![VERSION](https://img.shields.io/badge/Version-0.1.1-green)
 
 A work-in-progress port of [Rocket League](https://www.rocketleague.com/) to the GameBoy (Pocket)!
 
@@ -59,6 +59,11 @@ Check out the [latest release](https://github.com/ty-porter/pocket-league/releas
 * [GBSoundDemo](https://github.com/Zal0/GBSoundDemo) - A replacement for the broken `sound` example in GBDK
 * [GBTDG](https://github.com/chrisantonellis/gbtdg/) - Gameboy Tile Data Generator
 * [Beepbox](https://www.beepbox.co/) - Simple chiptune sound designer
+* [untoxa's GBTD/GBMB Patches](https://github.com/untoxa/GBTD_GBMB)
+
+## Following Pocket League Development
+
+Check out my dev blog series dedicated to Pocket League development at [ty-porter.github.io](https://ty-porter.github.io/development/2021/04/04/writing-a-gameboy-game-in-2021-pt-0.html)!
 
 ## Contact
 

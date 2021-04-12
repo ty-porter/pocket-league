@@ -1,8 +1,8 @@
 /*
 
- CURSOR.H
+ PIXEL.C
 
- Include File.
+ Tile Source File.
 
  Info:
   Form                 : All tiles as one unit.
@@ -22,10 +22,11 @@
 
 */
 
-
-/* Bank of tiles. */
-#define cursorBank 0
 /* Start of tile array. */
-extern const unsigned char cursor[];
+const unsigned char pixel[] =
+{
+  0x80,0x80,0x00,0x00,0x00,0x00,0x00,0x00,
+  0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00
+};
 
-/* End of CURSOR.H */
+/* End of PIXEL.C */

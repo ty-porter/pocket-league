@@ -1,6 +1,6 @@
 /*
 
- CURSOR.H
+ PIXEL.H
 
  Include File.
 
@@ -24,8 +24,8 @@
 
 
 /* Bank of tiles. */
-#define cursorBank 0
+#define pixelBank 0
 /* Start of tile array. */
-extern const unsigned char cursor[];
+extern const unsigned char pixel[];
 
-/* End of CURSOR.H */
+/* End of PIXEL.H */

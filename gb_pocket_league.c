@@ -13,12 +13,20 @@
 #include "sprites/cursor.c"
 #include "sprites/numbers.c"
 
+// Debug pixels for hitboxes
+#include "sprites/pixel.c"
+
 #include "backgrounds/title.h"
 #include "backgrounds/arena.h"
 
+<<<<<<< HEAD
 #include "sounds/sound.c"
 
 #define CPU_DISABLED        1 // Debug flag, 1 disables CPU inputs
+=======
+#define CPU_DISABLED        0 // Debug flag, 1 disables CPU inputs
+#define HITBOXES_ENABLED    0 // Weird things can happen, use at risk
+>>>>>>> main
 
 #define FLOOR               140u
 #define CEILING             24u
@@ -74,9 +82,13 @@ void load_font() {
     font_set(credits_font);
 }
 
+UINT8 rotation_quadrant(UINT8 rot) {
+    return rot / 32;
+}
+
 /* Rolls the car clockwise based on *rot* param (INT8 0 - 255) */
 void draw_car_roll(INT8 n, UINT8 rot) {
-    UINT8 quadrant = rot / 32;
+    UINT8 quadrant = rotation_quadrant(rot);
 
     UINT8 invert_x = 0;
     UINT8 invert_y = 0;
@@ -194,7 +206,7 @@ void draw_boost_sprite(UINT8 n, UINT8 x, UINT8 y, UINT8 rot, UINT8 t) {
     INT8 y_o = 0;
     UINT8 tick_prop = 0x00;
     UINT8 mod_prop = 0x00;
-    UINT8 quadrant = rot / 32;
+    UINT8 quadrant = rotation_quadrant(rot);
 
     unsigned char cpu_offset[] = { 4, 5, 6, 7, 0, 1, 2, 3 };
 
@@ -271,6 +283,106 @@ void draw_boost_sprite(UINT8 n, UINT8 x, UINT8 y, UINT8 rot, UINT8 t) {
 
 void kill_boost_sprite(UINT8 n) {
     move_sprite((n * 5) + 4, 255, 255); // offscreen
+}
+
+void calculate_ball_hitbox(UINT8 x, UINT8 y, UINT8 *x1, UINT8 *y1, UINT8 *x2, UINT8 *y2) {
+    *x1 = x;
+    *x2 = x + 15;
+    *y1 = y;
+    *y2 = y + 15;
+}
+
+UINT8 * calculate_car_hitbox(UINT8 x, UINT8 y, UINT8 rot) {
+    UINT8 quadrant = rotation_quadrant(rot);
+    UINT8 hitbox[12] = { 
+        255, 255, 255, 255,
+        255, 255, 255, 255,
+        255, 255, 255, 255
+    };
+
+    if (quadrant == 0 || quadrant == 4) {
+        hitbox[0] = x;
+        hitbox[1] = x + 15;
+        hitbox[2] = y + 6;
+        hitbox[3] = y + 10;
+    }
+    else if (quadrant == 1 || quadrant == 5) {
+        hitbox[0] = x + 2;
+        hitbox[1] = x + 8;
+        hitbox[2] = y + 1;
+        hitbox[3] = y + 7;
+
+        hitbox[4] = x + 5;
+        hitbox[5] = x + 11;
+        hitbox[6] = y + 4;
+        hitbox[7] = y + 11;
+
+        hitbox[8] = x + 8;
+        hitbox[9] = x + 13;
+        hitbox[10] = y + 10;
+        hitbox[11] = y + 14;
+    }
+    else if (quadrant == 3 || quadrant == 7) {
+        hitbox[0] = x + 8;
+        hitbox[1] = x + 14;
+        hitbox[2] = y + 2;
+        hitbox[3] = y + 6;
+
+        hitbox[4] = x + 4;
+        hitbox[5] = x + 11;
+        hitbox[6] = y + 4;
+        hitbox[7] = y + 11;
+
+        hitbox[8] = x + 1;
+        hitbox[9] = x + 6;
+        hitbox[10] = y + 10;
+        hitbox[11] = y + 13;
+    }
+    else if (quadrant == 2 || quadrant == 6) {
+        hitbox[0] = x + 6;
+        hitbox[1] = x + 10;
+        hitbox[2] = y;
+        hitbox[3] = y + 15;
+    }
+
+    return hitbox;
+}
+
+void draw_car_hitbox(UINT8 x, UINT8 y, UINT8 rot) {
+    UINT8 *hitbox;
+
+    hitbox = calculate_car_hitbox(x, y, rot);
+
+    for (INT8 i = 0; i < 3; i++) {
+        for (INT8 j = 0; j < 4; j++) {
+            set_sprite_tile(23 + (4 * i) + j, 47);
+
+            move_sprite(23 + (4 * i), hitbox[4 * i    ], hitbox[4 * i + 2]);
+            move_sprite(24 + (4 * i), hitbox[4 * i    ], hitbox[4 * i + 3]);
+            move_sprite(25 + (4 * i), hitbox[4 * i + 1], hitbox[4 * i + 2]);
+            move_sprite(26 + (4 * i), hitbox[4 * i + 1], hitbox[4 * i + 3]);
+        }
+    }
+
+    move_sprite(14, 255, 255); // Move player tag offscreen
+}
+
+void draw_ball_hitbox(UINT8 x, UINT8 y) {
+    UINT8 x1 = x;
+    UINT8 x2 = x;
+    UINT8 y1 = y;
+    UINT8 y2 = y;
+
+    calculate_ball_hitbox(x, y, &x1, &y1, &x2, &y2);
+
+    for (INT8 i = 0; i < 4; i++) {
+        set_sprite_tile(i + 19, 47);
+    }
+
+    move_sprite(19, x1, y1);
+    move_sprite(20, x1, y2);
+    move_sprite(21, x2, y1);
+    move_sprite(22, x2, y2);
 }
 
 void move_car_sprite(UINT8 n, UINT8 x, UINT8 y, UINT8 rot) {
@@ -381,7 +493,7 @@ void initialize_game_background() {
 }
 
 void calculate_boost_velocity_vectors(UINT8 n, UINT8 rot, INT8 *d_x, INT8 *d_y) {
-    UINT8 quadrant = rot / 32;
+    UINT8 quadrant = rotation_quadrant(rot);
     INT8 x_mod = 0;
     INT8 y_mod = 0;
 
@@ -434,15 +546,57 @@ void calculate_boost_velocity_vectors(UINT8 n, UINT8 rot, INT8 *d_x, INT8 *d_y) 
     *d_y += BOOST_ACCELERATION * y_mod;
 }
 
-UINT8 calculate_ball_velocity_vectors(UINT8 x, UINT8 y, INT8 d_x, INT8 d_y, UINT8 ball_x, UINT8 ball_y, INT8 *ball_d_x, INT8 *ball_d_y) {
-    if ((x <= ball_x + 16 && x >= ball_x - 16) && (y <= ball_y + 11 && y >= ball_y - 5)) {
+UINT8 max(UINT8 a, UINT8 b) {
+    if (a > b) {
+        return a;
+    } else {
+        return b;
+    }
+}
+
+UINT8 min(UINT8 a, UINT8 b) {
+    if (a < b) {
+        return a;
+    } else {
+        return b;
+    }
+}
+
+UINT8 detect_collision(UINT8 x, UINT8 y, UINT8 rot, UINT8 ball_x, UINT8 ball_y) {
+    UINT8 *car_hitbox;
+    
+    car_hitbox = calculate_car_hitbox(x, y, rot);
+    UINT8 ball_x1;
+    UINT8 ball_x2;
+    UINT8 ball_y1;
+    UINT8 ball_y2;
+
+    calculate_ball_hitbox(ball_x, ball_y, &ball_x1, &ball_y1, &ball_x2, &ball_y2);
+
+    for (INT8 i = 0; i < 3; i++) { // Iterate through the possible hitboxes
+        if (car_hitbox[4 * i] == 255) { // Blank hitbox
+            continue;
+        }
+
+        if (car_hitbox[4 * i + 1] >= ball_x1 && car_hitbox[4 * i] <= ball_x2) {
+            if (car_hitbox[4 * i + 3] >= ball_y1 && car_hitbox[4 * i + 2] <= ball_y2) {
+                return 1;
+            }
+        }
+    }
+
+    return 0; // Default to FALSE
+}
+
+UINT8 calculate_ball_velocity_vectors(UINT8 x, UINT8 y, INT8 d_x, INT8 d_y, UINT8 rot, UINT8 ball_x, UINT8 ball_y, INT8 *ball_d_x, INT8 *ball_d_y) {
+    UINT8 collision = detect_collision(x, y, rot, ball_x, ball_y);
+
+    if (collision) {
         *ball_d_x = d_x * BALL_VELOCITY;
         *ball_d_y = d_y - (BALL_BUMP_VERT * abs(d_x) / 10);
-
-        return 1; // Collision
     }
-    
-    return 0;
+
+    return collision;
 }
 
 UINT8 int_distance(UINT8 x, UINT8 y) {
@@ -536,8 +690,9 @@ sound tick_car_physics(UINT8 n, UINT8 *x, UINT8 *y, INT8 *d_x, INT8 *d_y, UINT8 
 
 sound tick_ball_physics(
     UINT8 *ball_x_pos, UINT8 *ball_y_pos, INT8 *ball_d_x, INT8 *ball_d_y,
-    UINT8  plr_x_pos,  UINT8  plr_y_pos,  INT8  plr_d_x,  INT8  plr_d_y,         
-    UINT8  cpu_x_pos,  UINT8  cpu_y_pos,  INT8  cpu_d_x,  INT8  cpu_d_y
+    UINT8  plr_x_pos,  UINT8  plr_y_pos,  INT8  plr_d_x,  INT8  plr_d_y,  UINT8 plr_rot,
+    UINT8  cpu_x_pos,  UINT8  cpu_y_pos,  INT8  cpu_d_x,  INT8  cpu_d_y,  UINT8 cpu_rot,
+    UINT8  skip_collision_checks
 ) {
     UINT8 ball_sound = NONE;
 
@@ -577,12 +732,14 @@ sound tick_ball_physics(
         ball_sound = BOUNCE;
     }
 
-    UINT8 player_collision = calculate_ball_velocity_vectors(cpu_x_pos, cpu_y_pos, cpu_d_x, cpu_d_y, *ball_x_pos, *ball_y_pos, ball_d_x, ball_d_y);
-    UINT8 cpu_collision = calculate_ball_velocity_vectors(plr_x_pos, plr_y_pos, plr_d_x, plr_d_y, *ball_x_pos, *ball_y_pos, ball_d_x, ball_d_y);
+    if (!skip_collision_checks) {
+        UINT8 player_collision = calculate_ball_velocity_vectors(cpu_x_pos, cpu_y_pos, cpu_d_x, cpu_d_y, cpu_rot, *ball_x_pos, *ball_y_pos, ball_d_x, ball_d_y);
+        UINT8 cpu_collision = calculate_ball_velocity_vectors(plr_x_pos, plr_y_pos, plr_d_x, plr_d_y, plr_rot, *ball_x_pos, *ball_y_pos, ball_d_x, ball_d_y);
 
-    if (player_collision && cpu_collision) { // Pinch!
-        *ball_d_x += (plr_d_x + cpu_d_x);
-        *ball_d_y += (plr_d_y + cpu_d_y);
+        if (player_collision && cpu_collision) { // Pinch!
+            *ball_d_x += (plr_d_x + cpu_d_x);
+            *ball_d_y += (plr_d_y + cpu_d_y);
+        }
     }
 
     UINT8 in_goal = (*ball_y_pos > GOAL_Y_MIN && *ball_y_pos < GOAL_Y_MAX);
@@ -680,8 +837,9 @@ INT8 calculate_cpu_input(UINT8 x, UINT8 y, UINT8 rot, UINT8 ball_x, UINT8 ball_y
     while (counter < CPU_PREDICTION) {
         tick_ball_physics(
             &ball_x, &ball_y, &ball_d_x, &ball_d_y,
-            255, 255, 255, 255,
-            255, 255, 255, 255
+            255, 255, 255, 255, 0,
+            255, 255, 255, 255, 0,
+            1 // skip collision checking
         );
 
         counter++;
@@ -710,7 +868,7 @@ INT8 calculate_cpu_input(UINT8 x, UINT8 y, UINT8 rot, UINT8 ball_x, UINT8 ball_y
 
     quadrant = calculate_ball_quadrant(x, y, ball_x, ball_y);
 
-    if (rot / 32 == quadrant) {
+    if (rotation_quadrant(rot) == quadrant) {
         input = input | J_B;
     }
 
@@ -835,6 +993,10 @@ screen_t game() {
     initialize_ball();
 
     enable_sound();
+    
+    if (HITBOXES_ENABLED) {
+        set_sprite_data(47, 1, pixel);
+    }
 
     SHOW_BKG; SHOW_SPRITES;
 
@@ -989,9 +1151,10 @@ screen_t game() {
 
         if (score_flag == 0) {
             ball_sound = tick_ball_physics(
-                &ball_x_pos, &ball_y_pos, &ball_d_x, &ball_d_y, // Ball data
-                 plr_x_pos,   plr_y_pos,   plr_d_x,   plr_d_y,  // Player data
-                 cpu_x_pos,   cpu_y_pos,   cpu_d_x,   cpu_d_y   // CPU data
+                &ball_x_pos, &ball_y_pos, &ball_d_x, &ball_d_y,          // Ball data
+                 plr_x_pos,   plr_y_pos,   plr_d_x,   plr_d_y,  plr_rot, // Player data
+                 cpu_x_pos,   cpu_y_pos,   cpu_d_x,   cpu_d_y,  cpu_rot, // CPU data
+                 0                                                       // enable collision checking
             );
         }
 
@@ -1035,6 +1198,11 @@ screen_t game() {
 
         // queue_car_sound(&car_sound);
         queue_ball_sound(&ball_sound);
+        
+        if (HITBOXES_ENABLED) { // Overlay the hitbox
+            draw_car_hitbox(plr_x_pos, plr_y_pos, plr_rot);
+            draw_ball_hitbox(ball_x_pos, ball_y_pos);
+        }
 
         tick++;
     }

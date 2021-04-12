@@ -26,6 +26,6 @@
 /* Bank of tiles. */
 #define boostBank 0
 /* Start of tile array. */
-extern unsigned char boost[];
+extern const unsigned char boost[];
 
 /* End of BOOST.H */
