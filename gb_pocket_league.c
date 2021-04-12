@@ -19,7 +19,10 @@
 #include "backgrounds/title.h"
 #include "backgrounds/arena.h"
 
-#define CPU_DISABLED        0 // Debug flag, 1 disables CPU inputs
+#include "sounds/bgm.h"
+#include "sounds/sound.c"
+
+#define CPU_DISABLED        1 // Debug flag, 1 disables CPU inputs
 #define HITBOXES_ENABLED    0 // Weird things can happen, use at risk
 
 #define FLOOR               140u
@@ -56,6 +59,8 @@
 #define BOUNCE_DECAY        5
 
 #define CPU_PREDICTION      5 // How many ticks to spend predicting ball position
+
+#define BGM_SPEED           2 // Lower is faster
 
 typedef enum {
     TITLE,
@@ -601,7 +606,9 @@ UINT8 int_distance(UINT8 x, UINT8 y) {
     }
 }
 
-void tick_car_physics(UINT8 n, UINT8 *x, UINT8 *y, INT8 *d_x, INT8 *d_y, UINT8 *rot, UINT8 input1, UINT8 input2) {
+sound tick_car_physics(UINT8 n, UINT8 *x, UINT8 *y, INT8 *d_x, INT8 *d_y, UINT8 *rot, UINT8 input1, UINT8 input2) {
+    sound car_sound = NONE;
+
     // Jump
     if (debounced_input(J_A, input1, input2) && *y == FLOOR) {
         *d_y = -JUMP_ACCELERATION;
@@ -613,9 +620,13 @@ void tick_car_physics(UINT8 n, UINT8 *x, UINT8 *y, INT8 *d_x, INT8 *d_y, UINT8 *
         
         if (input1 & J_RIGHT)  {
             *d_x += ACCELERATION;
+
+            car_sound = DRIVE;
         }
         else if (input1 & J_LEFT) {
             *d_x -= ACCELERATION;
+
+            car_sound = DRIVE;
         }
         else if (!(input1 & J_B)) {
             if (*d_x > 0) {
@@ -672,14 +683,20 @@ void tick_car_physics(UINT8 n, UINT8 *x, UINT8 *y, INT8 *d_x, INT8 *d_y, UINT8 *
         *y = CEILING;
         *d_y = 0;
     }
+
+    return car_sound;
 }
 
-void tick_ball_physics(
+sound tick_ball_physics(
     UINT8 *ball_x_pos, UINT8 *ball_y_pos, INT8 *ball_d_x, INT8 *ball_d_y,
     UINT8  plr_x_pos,  UINT8  plr_y_pos,  INT8  plr_d_x,  INT8  plr_d_y,  UINT8 plr_rot,
     UINT8  cpu_x_pos,  UINT8  cpu_y_pos,  INT8  cpu_d_x,  INT8  cpu_d_y,  UINT8 cpu_rot,
     UINT8  skip_collision_checks
 ) {
+    sound ball_sound = NONE;
+    UINT8 player_collision = 0;
+    UINT8 cpu_collision = 0;
+
     if (*ball_d_x > 0) {
         if (*ball_d_x - ACCELERATION >= 0) {
             *ball_d_x -= ACCELERATION;
@@ -705,16 +722,20 @@ void tick_ball_physics(
 
         if (*ball_d_y > 0) {
             *ball_d_y = 0;
+        } else {
+            ball_sound = BOUNCE;
         }
     }
     else if (*ball_y_pos + *ball_d_y < CEILING) {
         *ball_d_y *= -1;
         *ball_y_pos = CEILING;
+        
+        ball_sound = BOUNCE;
     }
 
     if (!skip_collision_checks) {
-        UINT8 player_collision = calculate_ball_velocity_vectors(cpu_x_pos, cpu_y_pos, cpu_d_x, cpu_d_y, cpu_rot, *ball_x_pos, *ball_y_pos, ball_d_x, ball_d_y);
-        UINT8 cpu_collision = calculate_ball_velocity_vectors(plr_x_pos, plr_y_pos, plr_d_x, plr_d_y, plr_rot, *ball_x_pos, *ball_y_pos, ball_d_x, ball_d_y);
+        player_collision = calculate_ball_velocity_vectors(cpu_x_pos, cpu_y_pos, cpu_d_x, cpu_d_y, cpu_rot, *ball_x_pos, *ball_y_pos, ball_d_x, ball_d_y);
+        cpu_collision = calculate_ball_velocity_vectors(plr_x_pos, plr_y_pos, plr_d_x, plr_d_y, plr_rot, *ball_x_pos, *ball_y_pos, ball_d_x, ball_d_y);
 
         if (player_collision && cpu_collision) { // Pinch!
             *ball_d_x += (plr_d_x + cpu_d_x);
@@ -724,15 +745,19 @@ void tick_ball_physics(
 
     UINT8 in_goal = (*ball_y_pos > GOAL_Y_MIN && *ball_y_pos < GOAL_Y_MAX);
 
-    if (!in_goal) { // Goal conditions! Skip overflow checks and keep the ball moving.
-        // Handle overflow errors
+    if (!in_goal) { // Not in the goal, should bounce
+        // Handle X overflow errors
         if (abs(*ball_d_x) >= *ball_x_pos && *ball_d_x < 0) {
             *ball_x_pos = ARENA_X_MIN;
             *ball_d_x *= -1;
+
+            ball_sound = BOUNCE;
         }
         else if (*ball_d_x + *ball_x_pos > 255) {
             *ball_x_pos = ARENA_X_MAX;
             *ball_d_x *= -1;
+
+            ball_sound = BOUNCE;
         }
     } else {
         if (abs(*ball_d_x) >= *ball_x_pos && *ball_d_x < 0) {
@@ -741,24 +766,37 @@ void tick_ball_physics(
         }
     }
 
+    // Handle Y overflow errors
     if (*ball_y_pos < abs(*ball_d_y) && *ball_d_y < 0) {
         *ball_y_pos = CEILING;
         *ball_d_y *= -1;
+
+        ball_sound = BOUNCE;
     }
 
     *ball_x_pos += *ball_d_x;
     *ball_y_pos += *ball_d_y;
 
-    if (!in_goal) { // Goal conditions! Skip bounce checks and keep the ball moving.
+    if (!in_goal) { // Not in the goal, should bounce
         if (*ball_x_pos > ARENA_X_MAX) {
             *ball_x_pos = ARENA_X_MAX;
             *ball_d_x *= -1;
+
+            ball_sound = BOUNCE;
         }
         else if (*ball_x_pos < ARENA_X_MIN) {
             *ball_x_pos = ARENA_X_MIN;
             *ball_d_x *= -1;
+
+            ball_sound = BOUNCE;
         }
     }
+
+    if (player_collision || cpu_collision) {
+        ball_sound = HIT;
+    }
+
+    return ball_sound;
 }
 
 UINT8 calculate_ball_quadrant(UINT8 car_x, UINT8 car_y, UINT8 ball_x, UINT8 ball_y) {
@@ -853,9 +891,13 @@ screen_t title() {
     INT8 key1    = joypad();
     INT8 key2    = key1;
     UINT8 cursor = 0;
+    UINT8 bgm_counter = 0;
+    UINT8 current_beat = 0;
+    UINT8 tick = 0;
 
     screen_t next_screen = TITLE;
 
+    enable_sound();
     initialize_title_background();
 
     // Fade in the title screen
@@ -870,6 +912,17 @@ screen_t title() {
     SHOW_BKG; SHOW_SPRITES;
 
     while(1) {
+        // Play the background music
+        if (bgm_counter == BGM_SPEED) {
+            bgm_counter = 0;
+            play_song(current_beat);
+
+            current_beat++;
+            if (current_beat == BGM_LENGTH) {
+                current_beat = 0;
+            }
+        }
+
         // Read the keys
         key2 = key1;
         key1 = joypad();
@@ -907,6 +960,12 @@ screen_t title() {
                 return next_screen;
             }
         }
+    
+        if (tick == 255) {
+            bgm_counter++;
+            tick = 0;
+        }
+        tick++;
     }
 }
 
@@ -955,6 +1014,8 @@ screen_t game() {
     initialize_cars(NUM_CARS);
     initialize_ball();
 
+    enable_sound();
+    
     if (HITBOXES_ENABLED) {
         set_sprite_data(47, 1, pixel);
     }
@@ -999,6 +1060,9 @@ screen_t game() {
     UINT8 reset_flag = 1; // Reset the game for next play
     UINT8 reset_countdown = 0; // How long to wait before resetting
 
+    sound car_sound = NONE;
+    sound ball_sound = NONE;
+
     while(1) {
         wait_vbl_done();
         
@@ -1039,6 +1103,9 @@ screen_t game() {
             countdown = 3;
             reset_flag = 0;
             reset_countdown = 0;
+
+            car_sound = NONE;
+            ball_sound = NONE;
         }
 
         if (tick % GAME_SPEED != 0) {
@@ -1101,11 +1168,11 @@ screen_t game() {
             }
         }
 
-        tick_car_physics(0, &plr_x_pos, &plr_y_pos, &plr_d_x, &plr_d_y, &plr_rot, key1,     key2);
+        car_sound = tick_car_physics(0, &plr_x_pos, &plr_y_pos, &plr_d_x, &plr_d_y, &plr_rot, key1,     key2);
         tick_car_physics(1, &cpu_x_pos, &cpu_y_pos, &cpu_d_x, &cpu_d_y, &cpu_rot, cpu_key1, cpu_key2);
 
         if (score_flag == 0) {
-            tick_ball_physics(
+            ball_sound = tick_ball_physics(
                 &ball_x_pos, &ball_y_pos, &ball_d_x, &ball_d_y,          // Ball data
                  plr_x_pos,   plr_y_pos,   plr_d_x,   plr_d_y,  plr_rot, // Player data
                  cpu_x_pos,   cpu_y_pos,   cpu_d_x,   cpu_d_y,  cpu_rot, // CPU data
@@ -1151,6 +1218,9 @@ screen_t game() {
             kill_boost_sprite(1);
         }
 
+        // queue_car_sound(&car_sound);
+        queue_ball_sound(&ball_sound);
+        
         if (HITBOXES_ENABLED) { // Overlay the hitbox
             draw_car_hitbox(plr_x_pos, plr_y_pos, plr_rot);
             draw_ball_hitbox(ball_x_pos, ball_y_pos);
