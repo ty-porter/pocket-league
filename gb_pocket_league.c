@@ -19,14 +19,11 @@
 #include "backgrounds/title.h"
 #include "backgrounds/arena.h"
 
-<<<<<<< HEAD
+#include "sounds/bgm.h"
 #include "sounds/sound.c"
 
 #define CPU_DISABLED        1 // Debug flag, 1 disables CPU inputs
-=======
-#define CPU_DISABLED        0 // Debug flag, 1 disables CPU inputs
 #define HITBOXES_ENABLED    0 // Weird things can happen, use at risk
->>>>>>> main
 
 #define FLOOR               140u
 #define CEILING             24u
@@ -62,6 +59,8 @@
 #define BOUNCE_DECAY        5
 
 #define CPU_PREDICTION      5 // How many ticks to spend predicting ball position
+
+#define BGM_SPEED           2 // Lower is faster
 
 typedef enum {
     TITLE,
@@ -694,7 +693,9 @@ sound tick_ball_physics(
     UINT8  cpu_x_pos,  UINT8  cpu_y_pos,  INT8  cpu_d_x,  INT8  cpu_d_y,  UINT8 cpu_rot,
     UINT8  skip_collision_checks
 ) {
-    UINT8 ball_sound = NONE;
+    sound ball_sound = NONE;
+    UINT8 player_collision = 0;
+    UINT8 cpu_collision = 0;
 
     if (*ball_d_x > 0) {
         if (*ball_d_x - ACCELERATION >= 0) {
@@ -733,8 +734,8 @@ sound tick_ball_physics(
     }
 
     if (!skip_collision_checks) {
-        UINT8 player_collision = calculate_ball_velocity_vectors(cpu_x_pos, cpu_y_pos, cpu_d_x, cpu_d_y, cpu_rot, *ball_x_pos, *ball_y_pos, ball_d_x, ball_d_y);
-        UINT8 cpu_collision = calculate_ball_velocity_vectors(plr_x_pos, plr_y_pos, plr_d_x, plr_d_y, plr_rot, *ball_x_pos, *ball_y_pos, ball_d_x, ball_d_y);
+        player_collision = calculate_ball_velocity_vectors(cpu_x_pos, cpu_y_pos, cpu_d_x, cpu_d_y, cpu_rot, *ball_x_pos, *ball_y_pos, ball_d_x, ball_d_y);
+        cpu_collision = calculate_ball_velocity_vectors(plr_x_pos, plr_y_pos, plr_d_x, plr_d_y, plr_rot, *ball_x_pos, *ball_y_pos, ball_d_x, ball_d_y);
 
         if (player_collision && cpu_collision) { // Pinch!
             *ball_d_x += (plr_d_x + cpu_d_x);
@@ -890,9 +891,13 @@ screen_t title() {
     INT8 key1    = joypad();
     INT8 key2    = key1;
     UINT8 cursor = 0;
+    UINT8 bgm_counter = 0;
+    UINT8 current_beat = 0;
+    UINT8 tick = 0;
 
     screen_t next_screen = TITLE;
 
+    enable_sound();
     initialize_title_background();
 
     // Fade in the title screen
@@ -907,6 +912,17 @@ screen_t title() {
     SHOW_BKG; SHOW_SPRITES;
 
     while(1) {
+        // Play the background music
+        if (bgm_counter == BGM_SPEED) {
+            bgm_counter = 0;
+            play_song(current_beat);
+
+            current_beat++;
+            if (current_beat == BGM_LENGTH) {
+                current_beat = 0;
+            }
+        }
+
         // Read the keys
         key2 = key1;
         key1 = joypad();
@@ -944,6 +960,12 @@ screen_t title() {
                 return next_screen;
             }
         }
+    
+        if (tick == 255) {
+            bgm_counter++;
+            tick = 0;
+        }
+        tick++;
     }
 }
 
