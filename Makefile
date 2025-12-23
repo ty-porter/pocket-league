@@ -15,7 +15,6 @@ BINS	= pocket_league.gb
 
 all:	$(BINS)
 
-
 make.bat: Makefile
 	@echo "REM Automatically generated from Makefile" > make.bat
 	@make -sn | sed y/\\//\\\\/ | grep -v make >> make.bat

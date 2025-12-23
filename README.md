@@ -1,6 +1,6 @@
 # gb-pocket-league
 
-![VERSION](https://img.shields.io/badge/Version-0.1.1-green)
+![VERSION](https://img.shields.io/badge/Version-0.1.3-green)
 
 A work-in-progress port of [Rocket League](https://www.rocketleague.com/) to the GameBoy (Pocket)!
 
@@ -44,9 +44,11 @@ Inspired heavily by [Rocket League Sidewipe](https://www.rocketleague.com/news/a
 
 Check out the [latest release](https://github.com/ty-porter/pocket-league/releases).
 
-### Generate Your Own:
+### Build from Source:
 
 #### Windows: 
+
+Building Pocket League requires GBDK 4.4.0 or greater. The batch file assumes you have GBDK installed at `C:\gbdk`, but you can adjust as needed
 
 1. Execute the `make.bat` file
 2. This will generate a GameBoy ROM titled `pocket_league.gb`
