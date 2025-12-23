@@ -1,6 +1,6 @@
 #include <gb/gb.h>
-#include <gb/console.h>
-#include <gb/font.h>
+#include <gbdk/console.h>
+#include <gbdk/font.h>
 
 #include <stdio.h>
 #include <rand.h>
@@ -71,8 +71,7 @@ const unsigned char fade_palettes[] = {
 
 void load_font() {
     font_init();
-    font_t credits_font;
-    credits_font = font_load(font_ibm);
+    font_t credits_font = font_load(font_ibm);
     font_set(credits_font);
 }
 

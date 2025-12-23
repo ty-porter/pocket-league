@@ -49,7 +49,7 @@ Check out the [latest release](https://github.com/ty-porter/pocket-league/releas
 #### Windows: 
 
 1. Execute the `make.bat` file
-2. This will generate a GameBoy ROM titled `gb_pocket_league.gb`
+2. This will generate a GameBoy ROM titled `pocket_league.gb`
 3. Load into your favorite GB emulator! ([BGB](https://bgb.bircd.org/) is preferred).
 
 ## Tooling
@@ -67,6 +67,6 @@ Check out my dev blog series dedicated to Pocket League development at [ty-porte
 
 ## Contact
 
-Tyler Porter
+Ty(ler) Porter
 
 tyler.b.porter@gmail.com

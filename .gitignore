@@ -1,5 +1,8 @@
 *.gb
 *.map
 *.noi
+*.asm
+*.lst
+*.sym
 
 .vscode

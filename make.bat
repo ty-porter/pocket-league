@@ -1,2 +1,2 @@
 REM Automatically generated from Makefile
-..\..\..\bin\lcc -Wa-l -Wl-m -Wl-j -Wm-ys -o gb_pocket_league.gb gb_pocket_league.c
+C:\gbdk\bin\lcc -Wa-l -Wl-m -Wl-j -Wm-ys -o pocket_league.gb pocket_league.c
